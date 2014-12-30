@@ -1,3 +1,6 @@
+// TODO:
+// * Verify success/failure of commands
+
 package dvapbridge
 
 import (
@@ -77,9 +80,25 @@ const DVAP_GMSK_TX_ACK_HDR         = 0x2F60
 
 const DVAP_MSG_MAX_BYTES           = 8191
 
+const DVAP_SQUELCH_MIN             = -128
+const DVAP_SQUELCH_MAX             = -45
+
+const DVAP_LED_INTENSITY_MIN       = 0
+const DVAP_LED_INTENSITY_MAX       = 100
+
+const DVAP_TX_POWER_MIN            = -12
+const DVAP_TX_POWER_MAX            = 10
+
+const DVAP_BAND_SCAN_STEPS_MIN     = 1
+const DVAP_BAND_SCAN_STEPS_MAX     = 800
+const DVAP_BAND_SCAN_STRIDE_MIN    = 1
+const DVAP_BAND_SCAN_STRIDE_MAX    = 255
+const DVAP_BAND_SCAN_FREQ_MIN      = 144000000
+const DVAP_BAND_SCAN_FREQ_MAX      = 148000000
+
 type RxMessage struct {
-	msgtype byte
-	msg     []byte
+	Msgtype byte
+	Msg     []byte
 }
 
 type Config struct {
@@ -91,6 +110,9 @@ type Config struct {
 
 	rxLoopEnabled bool
 	rxChannel     chan RxMessage
+	
+	// Channel for unsolicited messages
+	MsgChannel    chan RxMessage
 }
 
 func (c *Config) Open() error {
@@ -120,39 +142,36 @@ func (c *Config) Close() error {
 func (c *Config) GetName() string {
 	c.sendControlCommand(DVAP_MSG_HOST_REQ_CTRL_ITEM, DVAP_CTRL_TARGET_NAME, []byte{})
 	rx := <-c.rxChannel
-	return string(rx.msg[2:])
+	return string(rx.Msg[2:])
 }
 
 func (c *Config) GetSerial() string {
 	c.sendControlCommand(DVAP_MSG_HOST_REQ_CTRL_ITEM, DVAP_CTRL_TARGET_SERIAL, []byte{})
 	rx := <-c.rxChannel
-	return string(rx.msg[2:])
+	return string(rx.Msg[2:])
 }
 
 func (c *Config) GetInterfaceVersion() float32 {
 	c.sendControlCommand(DVAP_MSG_HOST_REQ_CTRL_ITEM, DVAP_CTRL_IFACE_VER, []byte{})
 	rx := <-c.rxChannel
-	return float32(binary.LittleEndian.Uint16(rx.msg[2:])) / 100.0
+	return float32(binary.LittleEndian.Uint16(rx.Msg[2:])) / 100.0
 }
 
-func (c *Config) GetFirmwareVersions() (float32, float32) {
-	var bootcodeVer, firmwareVer float32
-
+func (c *Config) GetFirmwareVersions() (bootcodeVer float32, firmwareVer float32) {
 	c.sendControlCommand(DVAP_MSG_HOST_REQ_CTRL_ITEM, DVAP_CTRL_HW_VER, []byte{0x00})
 	rx := <-c.rxChannel
-	bootcodeVer = float32(binary.LittleEndian.Uint16(rx.msg[3:])) / 100.0
+	bootcodeVer = float32(binary.LittleEndian.Uint16(rx.Msg[3:])) / 100.0
 
 	c.sendControlCommand(DVAP_MSG_HOST_REQ_CTRL_ITEM, DVAP_CTRL_HW_VER, []byte{0x01})
 	rx = <-c.rxChannel
-	firmwareVer = float32(binary.LittleEndian.Uint16(rx.msg[3:])) / 100.0
-
-	return bootcodeVer, firmwareVer
+	firmwareVer = float32(binary.LittleEndian.Uint16(rx.Msg[3:])) / 100.0
+	return
 }
 
 func (c *Config) GetStatusCode() byte {
 	c.sendControlCommand(DVAP_MSG_HOST_REQ_CTRL_ITEM, DVAP_CTRL_STATUS, []byte{})
 	rx := <-c.rxChannel
-	return rx.msg[2]
+	return rx.Msg[2]
 }
 
 func (c *Config) SetRunState(state byte) {
@@ -160,6 +179,7 @@ func (c *Config) SetRunState(state byte) {
 	<-c.rxChannel
 }
 
+// NOTE: Can only be sent when DVAP is stopped
 func (c *Config) SetModulationType(modulation byte) {
 	c.sendControlCommand(DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_MODULATION_TYPE, []byte{modulation})
 	<-c.rxChannel
@@ -168,6 +188,138 @@ func (c *Config) SetModulationType(modulation byte) {
 func (c *Config) SetOperationMode(mode byte) {
 	c.sendControlCommand(DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_OPERATION_MODE, []byte{mode})
 	<-c.rxChannel
+}
+
+func (c *Config) SetSquelchThreshold(dbm int) {
+	squelch := dbm
+	if dbm < DVAP_SQUELCH_MIN {
+		squelch = DVAP_SQUELCH_MIN
+	}
+	if dbm > DVAP_SQUELCH_MAX {
+		squelch = DVAP_SQUELCH_MAX
+	}
+	c.sendControlCommand(DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_SQUELCH_THRESH, []byte{byte(squelch & 0xFF)})
+	<-c.rxChannel
+}
+
+func (c *Config) SetExternalTRControlMode(mode byte) {
+	c.sendControlCommand(DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_EXTERNAL_TR_CTRL, []byte{mode})
+	<-c.rxChannel
+}
+
+func (c *Config) SetLEDControlDVAP() {
+	c.sendControlCommand(DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_LED_CONTROL, []byte{0x00, 0x00, 0x00, 0x00})
+	<-c.rxChannel
+}
+
+// NOTE: Valid intensity values are 0 to 100 (0 = off, 100 = max)
+func (c *Config) SetLEDControlHost(yellow uint, red uint, green uint) {
+	var y, r, g byte
+	if yellow < DVAP_LED_INTENSITY_MIN {
+		yellow = DVAP_LED_INTENSITY_MIN
+	}
+	if yellow > DVAP_LED_INTENSITY_MAX {
+		yellow = DVAP_LED_INTENSITY_MAX
+	}
+	if red < DVAP_LED_INTENSITY_MIN {
+		red = DVAP_LED_INTENSITY_MIN
+	}
+	if red > DVAP_LED_INTENSITY_MAX {
+		red = DVAP_LED_INTENSITY_MAX
+	}
+	if green < DVAP_LED_INTENSITY_MIN {
+		green = DVAP_LED_INTENSITY_MIN
+	}
+	if green > DVAP_LED_INTENSITY_MAX {
+		green = DVAP_LED_INTENSITY_MAX
+	}
+	y = byte(yellow & 0xFF)
+	r = byte(red & 0xFF)
+	g = byte(green & 0xFF)
+	c.sendControlCommand(DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_LED_CONTROL, []byte{0x01, y, r, g})
+	<-c.rxChannel
+}
+
+func (c *Config) SetRxFrequency(frequency uint32) {
+	freq := make([]byte, 4)
+	binary.LittleEndian.PutUint32(freq, frequency)
+	c.sendControlCommand(DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_RX_FREQ, freq)
+	<-c.rxChannel
+}
+
+func (c *Config) SetTxFrequency(frequency uint32) {
+	freq := make([]byte, 4)
+	binary.LittleEndian.PutUint32(freq, frequency)
+	c.sendControlCommand(DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_TX_FREQ, freq)
+	<-c.rxChannel
+}
+
+func (c *Config) SetRxTxFrequency(frequency uint32) {
+	freq := make([]byte, 4)
+	binary.LittleEndian.PutUint32(freq, frequency)
+	c.sendControlCommand(DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_TX_RX_FREQ, freq)
+	<-c.rxChannel
+}
+
+func (c *Config) GetTxFrequencyLimits() (lower uint32, upper uint32) {
+	c.sendControlCommand(DVAP_MSG_HOST_REQ_CTRL_ITEM, DVAP_CTRL_READ_TX_FREQ_LIM, []byte{})
+	rx := <-c.rxChannel
+	lower = binary.LittleEndian.Uint32(rx.Msg[2:])
+	upper = binary.LittleEndian.Uint32(rx.Msg[6:])
+	return
+}
+
+// Valid range is -12 dBm to 10 dBm
+func (c *Config) SetTxPower(dbm int) {
+	power := dbm
+	if dbm < DVAP_TX_POWER_MIN {
+		power = DVAP_TX_POWER_MIN
+	}
+	if dbm > DVAP_TX_POWER_MAX {
+		power = DVAP_TX_POWER_MAX
+	}
+
+	pwr := make([]byte, 2)
+	binary.LittleEndian.PutUint16(pwr, uint16(power))
+	c.sendControlCommand(DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_TX_POWER, pwr)
+	<-c.rxChannel
+}
+
+// Valid number of steps is 1 to 800
+// Valid step size is 100Hz to 25,500Hz in 100 Hz increments (1, 255)
+// Valid start frequency range is 144,000,000 to 148,000,000
+func (c *Config) GetBandScan(numSteps uint16, stepSize byte, startFreq uint32) (rssi []byte) {
+	if numSteps < DVAP_BAND_SCAN_STEPS_MIN {
+		numSteps = DVAP_BAND_SCAN_STEPS_MIN
+	}
+	if numSteps > DVAP_BAND_SCAN_STEPS_MAX {
+		numSteps = DVAP_BAND_SCAN_STEPS_MAX
+	}
+	if stepSize < DVAP_BAND_SCAN_STRIDE_MIN {
+		stepSize = DVAP_BAND_SCAN_STRIDE_MIN
+	}
+	if stepSize > DVAP_BAND_SCAN_STRIDE_MAX {
+		stepSize = DVAP_BAND_SCAN_STRIDE_MAX
+	}
+	if startFreq < DVAP_BAND_SCAN_FREQ_MIN {
+		startFreq = DVAP_BAND_SCAN_FREQ_MIN
+	}
+	if startFreq > DVAP_BAND_SCAN_FREQ_MAX {
+		startFreq = DVAP_BAND_SCAN_FREQ_MAX
+	}
+	
+	payload := new(bytes.Buffer)
+	binary.Write(payload, binary.LittleEndian, numSteps)
+	binary.Write(payload, binary.LittleEndian, stepSize)
+	binary.Write(payload, binary.LittleEndian, startFreq)
+	c.sendControlCommand(DVAP_MSG_HOST_REQ_CTRL_ITEM, DVAP_CTRL_BAND_SCAN, payload.Bytes())
+	rx := <-c.rxChannel
+	rssi = rx.Msg[2:]
+	return
+}
+
+func (c *Config) ParseDTMF() {
+
 }
 
 func (c *Config) serialTx(msg []byte) {
@@ -224,11 +376,17 @@ func (c *Config) serialRxLoop() {
 		}
 
 		// Send to channel
-		fmt.Printf("rx: % X\n", buf[:expectedBytes])
+		fmt.Printf("rx: % X", buf[:expectedBytes])
 		var response RxMessage
-		response.msgtype = byte((buf[1] & 0xE0) >> 5)
-		response.msg = buf[2:expectedBytes]
-		c.rxChannel <- response
+		response.Msgtype = byte((buf[1] & 0xE0) >> 5)
+		response.Msg = buf[2:expectedBytes]
+		fmt.Printf(", type: %d\n", response.Msgtype)
+
+		if response.Msgtype == DVAP_MSG_TARGET_UNSOLICITED {
+			c.MsgChannel <- response
+		} else {
+			c.rxChannel <- response
+		}
 	}
 }
 
@@ -263,7 +421,7 @@ func (c *Config) sendControlCommand(msgtype byte, command uint16, payload []byte
 	// Update header
 	var pktlen int = 4 + len(payload)
 	pkt.Bytes()[0] = byte(pktlen & 0xFF)
-	pkt.Bytes()[1] = (msgtype << 5) | byte((pktlen&0x1F00)>>8)
+	pkt.Bytes()[1] = (msgtype << 5) | byte((pktlen & 0x1F00) >> 8)
 
 	c.txChannel <- pkt.Bytes()
 }

@@ -17,33 +17,33 @@ get_name(device_t* ctx, char* name, int name_len)
                     DVAP_CTRL_TARGET_NAME, NULL, 0);
   if (sent <= 0) {
     debug_print("%s\n", "get_name: error on dvap_write");
-    return -1;
+    return FALSE;
   }
   ret = dvap_read(ctx->fd, &msg_type, buf, DVAP_MSG_MAX_BYTES);
   if (ret <= 0) {
     debug_print("%s\n", "get_name: error on dvap_read");
-    return -1;
+    return FALSE;
   }
   ret -= 4;
   ret = (ret <= name_len) ? ret : name_len;
   strncpy(name, &buf[4], ret);
   printf("msg_type: %d\n", msg_type);
-  return 0;
+  return TRUE;
 }
 
 int
 dvap_init(device_t* ctx)
 {
   int fd;
-  if (!ctx) return -1;
+  if (!ctx) return FALSE;
 
   fd = serial_open("/dev/tty.usbserial-A602S3VR", B230400);
   if (fd < 0) {
-    return -1;
+    return FALSE;
   }
   ctx->fd = fd;
 
-  return 0;
+  return TRUE;
 }
 
 int
@@ -57,7 +57,7 @@ dvap_write(int fd, char msg_type, int command, char* payload,
   
   if (payload_bytes > DVAP_MSG_MAX_BYTES-4) {
     fprintf(stderr, "Error in send_command, payload too long\n");
-    return -1;
+    return FALSE;
   }
 
   pktlen = 4 + payload_bytes;
@@ -74,7 +74,7 @@ dvap_write(int fd, char msg_type, int command, char* payload,
   n = write(fd, &buf[0], 4);
   if (n <= 0) {
     debug_print("dvap_write - returned %d\n", n);
-    return n;
+    return FALSE;
   }
   sent_bytes += n;
 
@@ -85,7 +85,7 @@ dvap_write(int fd, char msg_type, int command, char* payload,
     n = write(fd, payload, payload_bytes);
     if (n <= 0) {
       debug_print("dvap_write - returned %d\n", n);
-      return n;
+      return FALSE;
     }
     sent_bytes += n;
   }
@@ -102,7 +102,7 @@ dvap_read(int fd, char* msg_type, char* buf, int buf_bytes)
 
   if (buf_bytes < expected_bytes) {
     fprintf(stderr, "dvap_read - buf_bytes too small\n");
-    return -1;
+    return FALSE;
   }
 
   // Receive header
@@ -110,7 +110,7 @@ dvap_read(int fd, char* msg_type, char* buf, int buf_bytes)
     n = read(fd, &buf[received_bytes], buf_bytes-received_bytes);
     if (n <= 0) {
       debug_print("dvap_read - returned %d\n", n);
-      return n;
+      return FALSE;
     }
     received_bytes += n;
     if (DEBUG) {
@@ -123,7 +123,7 @@ dvap_read(int fd, char* msg_type, char* buf, int buf_bytes)
   expected_bytes = buf[0] + ((buf[1] & 0x1F) << 8);
   if (expected_bytes >= buf_bytes) {
     fprintf(stderr, "dvap_read - expected %d bytes but only %d bytes available\n", expected_bytes, buf_bytes);
-    return -1;
+    return FALSE;
   }
 
   // Receive rest of packet
@@ -131,7 +131,7 @@ dvap_read(int fd, char* msg_type, char* buf, int buf_bytes)
     n = read(fd, &buf[received_bytes], buf_bytes-received_bytes);
     if (n <= 0) {
       debug_print("dvap_read - returned %d\n", n);
-      return n;
+      return FALSE;
     }
     received_bytes += n;
     if (DEBUG) {

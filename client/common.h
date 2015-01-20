@@ -9,6 +9,13 @@
                           __LINE__, __func__, __VA_ARGS__); } while (0)
 #define DEBUG 1
 
+#ifndef FALSE
+#define FALSE (0)
+#endif
+#ifndef TRUE
+#define TRUE (!FALSE)
+#endif
+
 void hex_dump(char* prefix, char* buf, int buf_len);
 
 #endif

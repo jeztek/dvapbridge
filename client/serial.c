@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include "common.h"
 #include "serial.h"
 
 int 
@@ -17,23 +18,23 @@ serial_open(char* portname, int speed)
   fd = open(portname, O_RDWR | O_NOCTTY | O_NONBLOCK);
   if (fd < 0) {
     fprintf(stderr, "Error opening port %s\n", portname);
-    return -1;
+    return FALSE;
   }
 
   memset(&tty, 0, sizeof(tty));
   if (tcgetattr(fd, &tty) != 0) {
     fprintf(stderr, "Error getting port attributes\n");
-    return -1;
+    return FALSE;
   }
   
   if (ioctl(fd, TIOCEXCL) != 0) {
     fprintf(stderr, "Error setting serial port TIOCEXCL flag\n");
-    return -1;
+    return FALSE;
   }
   
   if (fcntl(fd, F_SETFL, 0) != 0) {
     fprintf(stderr, "Error clearing serial port O_NONBLOCK flag\n");
-    return -1;
+    return FALSE;
   }
 
   cfmakeraw(&tty);
@@ -46,17 +47,17 @@ serial_open(char* portname, int speed)
 
   if (cfsetispeed(&tty, speed) != 0) {
     fprintf(stderr, "Error setting serial port input speed\n");
-    return -1;
+    return FALSE;
   }
 
   if (cfsetospeed(&tty, speed) != 0) {
     fprintf(stderr, "Error setting serial port output speed\n");
-    return -1;
+    return FALSE;
   }
 
   if (tcsetattr(fd, TCSAFLUSH, &tty) != 0) {
     fprintf(stderr, "Error setting port attributes\n");
-    return -1;
+    return FALSE;
   }
 
   return fd;
@@ -79,7 +80,7 @@ serial_open(char* portname, int speed)
 
   if (tcsetattr(fd, TCSANOW, &tty) != 0) {
     perror("Error setting port attributes\n");
-    return -1;
+    return FALSE;
   }
   */
 }

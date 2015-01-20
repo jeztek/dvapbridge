@@ -6,12 +6,14 @@ package dvapbridge
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"sync"
 	"time"
 )
-import goserial "github.com/tarm/goserial"
+//import goserial "github.com/tarm/goserial"
 
 const DVAP_BAUD = 230400
 
@@ -99,62 +101,85 @@ const DVAP_BAND_SCAN_FREQ_MAX      = 148000000
 type RxMessage struct {
 	Msgtype byte
 	Msg     []byte
+	Error   error
 }
 
 type Config struct {
-	Device string
-	serial io.ReadWriteCloser
+	Device        string
+	serial        io.ReadWriteCloser
 
-	txLoopEnabled bool
 	txChannel     chan []byte
-
-	rxLoopEnabled bool
 	rxChannel     chan RxMessage
-	
-	// Channel for unsolicited messages
-	MsgChannel    chan RxMessage
+
+	txShutdown    chan bool
+	rxShutdown    chan bool
+
+	MsgChannel    chan RxMessage	// Channel for unsolicited messages
+	MsgShutdown   chan bool
+	Wg            sync.WaitGroup
 }
 
 func (c *Config) Open() error {
 	var err error
-	s := &goserial.Config{Name: c.Device, Baud: DVAP_BAUD}
-	c.serial, err = goserial.OpenPort(s)
+	s := &SerialConfig{
+//	s := &goserial.Config{
+		Name: c.Device,
+		Baud: DVAP_BAUD,
+		ReadTimeout: time.Second,
+	}
+//	c.serial, err = goserial.OpenPort(s)
+	c.serial, err = OpenSerialPort(s)
+//	time.Sleep(time.Second*5)
 
 	if err == nil {
-		c.txLoopEnabled = true
-		c.txChannel = make(chan []byte)
-		go c.serialTxLoop()
-
-		c.rxLoopEnabled = true
+		c.txChannel = make(chan []byte, 10)
 		c.rxChannel = make(chan RxMessage)
+
+		c.txShutdown = make(chan bool)
+		c.rxShutdown = make(chan bool)
+
+		c.MsgChannel = make(chan RxMessage, 10)
+		c.MsgShutdown = make(chan bool)
+
 		go c.serialRxLoop()
+		go c.serialTxLoop()
 	}
 
 	return err
 }
 
 func (c *Config) Close() error {
-	c.txLoopEnabled = false
-	c.rxLoopEnabled = false
+	close(c.txShutdown)
+	close(c.rxShutdown)
+	fmt.Printf("Closing serial port\n")
 	return c.serial.Close()
 }
 
-func (c *Config) GetName() string {
+func (c *Config) GetName() (string, error) {
 	c.sendControlCommand(DVAP_MSG_HOST_REQ_CTRL_ITEM, DVAP_CTRL_TARGET_NAME, []byte{})
 	rx := <-c.rxChannel
-	return string(rx.Msg[2:])
+	if rx.Error != nil {
+		return "", rx.Error
+	}
+	return string(rx.Msg[2:]), nil
 }
 
-func (c *Config) GetSerial() string {
+func (c *Config) GetSerial() (string, error) {
 	c.sendControlCommand(DVAP_MSG_HOST_REQ_CTRL_ITEM, DVAP_CTRL_TARGET_SERIAL, []byte{})
 	rx := <-c.rxChannel
-	return string(rx.Msg[2:])
+	if rx.Error != nil {
+		return "", rx.Error
+	}
+	return string(rx.Msg[2:]), nil
 }
 
-func (c *Config) GetInterfaceVersion() float32 {
+func (c *Config) GetInterfaceVersion() (float32, error) {
 	c.sendControlCommand(DVAP_MSG_HOST_REQ_CTRL_ITEM, DVAP_CTRL_IFACE_VER, []byte{})
 	rx := <-c.rxChannel
-	return float32(binary.LittleEndian.Uint16(rx.Msg[2:])) / 100.0
+	if rx.Error != nil {
+		return 0.0, rx.Error
+	}
+	return float32(binary.LittleEndian.Uint16(rx.Msg[2:])) / 100.0, nil
 }
 
 func (c *Config) GetFirmwareVersions() (bootcodeVer float32, firmwareVer float32) {
@@ -339,8 +364,15 @@ func (c *Config) serialTx(msg []byte) {
 }
 
 func (c *Config) serialTxLoop() {
-	for c.txLoopEnabled {
+	c.Wg.Add(1)
+	fmt.Printf("incr wg (tx)\n")
+	for {
 		select {
+		case <-c.txShutdown:
+			fmt.Println("Shutting down serialtxloop")
+			c.Wg.Done()
+			fmt.Printf("decr wg (tx)\n")
+			return
 		case msg := <-c.txChannel:
 			c.serialTx(msg)
 		case <-time.After(time.Second * 3):
@@ -350,19 +382,48 @@ func (c *Config) serialTxLoop() {
 }
 
 func (c *Config) serialRxLoop() {
+	c.Wg.Add(1)
+	fmt.Printf("incr wg (rx)\n")
 	buf := make([]byte, DVAP_MSG_MAX_BYTES)
 
-	for c.rxLoopEnabled {
+	for {
 		var receivedBytes int = 0
 		var expectedBytes int = 2
 
+		select {
+		case <-c.rxShutdown:
+			fmt.Printf("Shutting down serialrxloop\n")
+			c.Wg.Done()
+			fmt.Printf("decr wg (rx)\n")
+			return
+		default:
+		}
+
+		fmt.Printf("rx waiting for data...\n")
+
 		// Receive header
+		n, err := c.serial.Read(buf[receivedBytes:])
+		if n == 0 {
+			fmt.Printf("rx timeout\n")
+
+			var response RxMessage
+			response.Error = errors.New("rx timeout")
+			c.rxChannel <- response
+			continue
+		} else {
+			receivedBytes += n
+			fmt.Printf("rx got %d bytes\n", n)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
 		for receivedBytes < expectedBytes {
 			n, err := c.serial.Read(buf[receivedBytes:])
 			if n == 0 || err != nil {
 				log.Fatal(err)
 			}
 			receivedBytes += n
+			fmt.Printf("rx got %d bytes\n", n)
 		}
 
 		// Receive rest of packet
@@ -380,12 +441,13 @@ func (c *Config) serialRxLoop() {
 		var response RxMessage
 		response.Msgtype = byte((buf[1] & 0xE0) >> 5)
 		response.Msg = buf[2:expectedBytes]
+		response.Error = nil
 		fmt.Printf(", type: %d\n", response.Msgtype)
 
-		if response.Msgtype == DVAP_MSG_TARGET_UNSOLICITED {
-			c.MsgChannel <- response
-		} else {
+		if response.Msgtype == DVAP_MSG_TARGET_ITEM_RESPONSE {
 			c.rxChannel <- response
+		} else {
+			c.MsgChannel <- response
 		}
 	}
 }

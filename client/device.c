@@ -2,34 +2,24 @@
 #include <unistd.h>
 #include <termios.h>
 #include <string.h>
-#include "serial.h"
+#include "common.h"
 #include "device.h"
-
-int 
-main(int argc, char* argv[])
-{
-  char buf[20];
-  int fd = serial_open("/dev/tty.usbserial-A602S3VR", B230400);
-  if (!get_name(fd, buf, 20)) {
-    printf("Name: %s\n", buf);
-  }
-  return 0;
-}
+#include "serial.h"
 
 int
-get_name(int fd, char* name, int name_len)
+get_name(device_t* ctx, char* name, int name_len)
 {
   int sent, ret;
   char msg_type;
   char buf[DVAP_MSG_MAX_BYTES];
 
-  sent = dvap_write(fd, DVAP_MSG_HOST_REQ_CTRL_ITEM, 
+  sent = dvap_write(ctx->fd, DVAP_MSG_HOST_REQ_CTRL_ITEM, 
                     DVAP_CTRL_TARGET_NAME, NULL, 0);
   if (sent <= 0) {
     debug_print("%s\n", "get_name: error on dvap_write");
     return -1;
   }
-  ret = dvap_read(fd, &msg_type, buf, DVAP_MSG_MAX_BYTES);
+  ret = dvap_read(ctx->fd, &msg_type, buf, DVAP_MSG_MAX_BYTES);
   if (ret <= 0) {
     debug_print("%s\n", "get_name: error on dvap_read");
     return -1;
@@ -42,11 +32,26 @@ get_name(int fd, char* name, int name_len)
 }
 
 int
+dvap_init(device_t* ctx)
+{
+  int fd;
+  if (!ctx) return -1;
+
+  fd = serial_open("/dev/tty.usbserial-A602S3VR", B230400);
+  if (fd < 0) {
+    return -1;
+  }
+  ctx->fd = fd;
+
+  return 0;
+}
+
+int
 dvap_write(int fd, char msg_type, int command, char* payload, 
              int payload_bytes)
 {
   int n;
-  int sentBytes = 0;
+  int sent_bytes = 0;
   char buf[4];
   int pktlen;
   
@@ -71,7 +76,7 @@ dvap_write(int fd, char msg_type, int command, char* payload,
     debug_print("dvap_write - returned %d\n", n);
     return n;
   }
-  sentBytes += n;
+  sent_bytes += n;
 
   if (payload) {
     if (DEBUG) {
@@ -82,10 +87,10 @@ dvap_write(int fd, char msg_type, int command, char* payload,
       debug_print("dvap_write - returned %d\n", n);
       return n;
     }
-    sentBytes += n;
+    sent_bytes += n;
   }
 
-  return sentBytes;
+  return sent_bytes;
 }
 
 int

@@ -8,17 +8,6 @@
 #include <sys/ioctl.h>
 #include "serial.h"
 
-void
-hex_dump(char* prefix, char* buf, int buf_len)
-{
-  int i;
-  printf("%s: ", prefix);
-  for (i = 0; i < buf_len; i++) {
-    printf("%02X ", buf[i]);
-  }
-  printf("(%d bytes)\n", buf_len);
-}
-
 int 
 serial_open(char* portname, int speed)
 {
@@ -48,12 +37,12 @@ serial_open(char* portname, int speed)
   }
 
   cfmakeraw(&tty);
-  tty.c_cflag |= (CLOCAL | CREAD);
-  tty.c_cflag |= CS8;
-  tty.c_cflag &= ~PARENB;
-  tty.c_cflag &= ~CSTOPB;
-  tty.c_cc[VMIN] = 0;
-  tty.c_cc[VTIME] = 5;
+  tty.c_cflag |= (CLOCAL | CREAD);	// local mode
+  tty.c_cflag |= CS8;			// 8-bit chars
+  tty.c_cflag &= ~PARENB;		// no parity
+  tty.c_cflag &= ~CSTOPB;		// 1 stop bit
+  tty.c_cc[VMIN] = 0;			// no inter-char timeout
+  tty.c_cc[VTIME] = 5;			// 0.5 second read timeout
 
   if (cfsetispeed(&tty, speed) != 0) {
     fprintf(stderr, "Error setting serial port input speed\n");
@@ -73,9 +62,6 @@ serial_open(char* portname, int speed)
   return fd;
 
   /*
-  cfsetospeed(&tty, speed);
-  cfsetispeed(&tty, speed);
-
   tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;	// 8-bit chars
   tty.c_iflag &= ~IGNBRK;	// disable break processing
   tty.c_lflag = 0;		// no signaling chars, no echo,
@@ -95,7 +81,5 @@ serial_open(char* portname, int speed)
     perror("Error setting port attributes\n");
     return -1;
   }
-
-  return 0;
   */
 }

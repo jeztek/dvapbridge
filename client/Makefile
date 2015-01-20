@@ -1,13 +1,13 @@
 CC = gcc
 
-TARGET = device
+TARGET = client
 FLAGS = -pthread
-INCLUDES =
-LIBS = 
+INCLUDES = -I/usr/local/include
+LIBS = -L/usr/local/lib
 
 all: $(TARGET)
 
-$(TARGET): serial.c device.c
+$(TARGET): common.c serial.c device.c main.c
 	$(CC) $(FLAGS) -Wall -o $@ $^ $(INCLUDES) $(LIBS)
 
 .PHONY: clean

@@ -82,13 +82,19 @@
 #define DVAP_BAND_SCAN_FREQ_MAX      148000000
 
 typedef struct {
+  int fd;
+} device_t;
+
+typedef struct {
   char msg_type;
   char *msg;
   int msg_bytes;
 } rx_message;
 
-int get_name(int fd, char* name, int name_len);
+int get_name(device_t* ctx, char* name, int name_len);
+
+int dvap_init(device_t* ctx);
 int dvap_write(int fd, char msg_type, int command, char* payload, 
-                 int payload_bytes);
+               int payload_bytes);
 int dvap_read(int fd, char* msg_type, char* buf, int buf_bytes);
 

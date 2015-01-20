@@ -2,7 +2,7 @@
 #include "common.h"
 
 void
-hex_dump(char* prefix, char* buf, int buf_len)
+hex_dump(char* prefix, unsigned char* buf, int buf_len)
 {
   int i;
   printf("%s: ", prefix);

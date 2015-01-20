@@ -1,3 +1,8 @@
+#ifndef DEVICE_H
+#define DEVICE_H
+
+#include <pthread.h>
+
 #define DVAP_BAUD 230400
 
 #define DVAP_MSG_HOST_SET_CTRL       0x00
@@ -83,6 +88,12 @@
 
 typedef struct {
   int fd;
+
+  int shutdown;
+  pthread_mutex_t shutdown_mutex;
+
+  pthread_t rx_thread;
+
 } device_t;
 
 typedef struct {
@@ -92,9 +103,17 @@ typedef struct {
 } rx_message;
 
 int get_name(device_t* ctx, char* name, int name_len);
+int set_runstate(device_t* ctx, char state);
 
 int dvap_init(device_t* ctx);
-int dvap_write(int fd, char msg_type, int command, char* payload, 
+void dvap_wait(device_t* ctx);
+void dvap_stop(device_t* ctx);
+int dvap_write(int fd, char msg_type, int command, unsigned char* payload, 
                int payload_bytes);
-int dvap_read(int fd, char* msg_type, char* buf, int buf_bytes);
+int dvap_read(int fd, char* msg_type, unsigned char* buf, int buf_bytes);
 
+int should_shutdown();
+void* read_loop(void* arg);
+void parse_rx_unsolicited(unsigned char* buf, int buf_len);
+
+#endif

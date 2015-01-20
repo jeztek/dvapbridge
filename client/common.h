@@ -16,6 +16,6 @@
 #define TRUE (!FALSE)
 #endif
 
-void hex_dump(char* prefix, char* buf, int buf_len);
+void hex_dump(char* prefix, unsigned char* buf, int buf_len);
 
 #endif

@@ -61,7 +61,7 @@ int
 dvap_init(device_t* ctx)
 {
   int fd;
-  //  if (!ctx) return FALSE;
+  if (!ctx) return FALSE;
 
   ctx->shutdown = FALSE;
   pthread_mutex_init(&(ctx->shutdown_mutex), NULL);
@@ -72,8 +72,26 @@ dvap_init(device_t* ctx)
   }
   ctx->fd = fd;
 
+  queue_init(&(ctx->rxq));
+  pthread_mutex_init(&(ctx->rxq_mutex), NULL);
+
+  queue_init(&(ctx->txq));
+  pthread_mutex_init(&(ctx->txq_mutex), NULL);
+
   pthread_create(&(ctx->rx_thread), NULL, read_loop, ctx);
 
+  return TRUE;
+}
+
+// Start run loop
+int
+dvap_start(device_t* ctx)
+{
+  if (!set_runstate(ctx, DVAP_RUN_STATE_RUN)) {
+    fprintf(stderr, "Error setting DVAP run state to RUN\n");
+    return FALSE;
+  }
+  // start tx loop
   return TRUE;
 }
 
@@ -86,14 +104,21 @@ dvap_wait(device_t* ctx)
   close(ctx->fd);
 }
 
-// Signal that we should start shutting down
-void
+// Shutdown DVAP device and shut down threads
+int
 dvap_stop(device_t* ctx)
 {
-  if (!ctx) return;
+  if (!ctx) return FALSE;
+
+  if (!set_runstate(ctx, DVAP_RUN_STATE_STOP)) {
+    fprintf(stderr, "Error setting DVAP run state to STOP\n");
+    return FALSE;
+  }
   pthread_mutex_lock(&(ctx->shutdown_mutex));
   ctx->shutdown = TRUE;
   pthread_mutex_unlock(&(ctx->shutdown_mutex));
+
+  return TRUE;
 }
 
 int
@@ -208,6 +233,13 @@ should_shutdown(device_t* ctx)
   return shutdown;
 }
 
+void*
+write_loop(void* arg)
+{
+  //device_t* ctx = (device_t *)arg;
+  return NULL;
+}
+
 void* 
 read_loop(void* arg)
 {
@@ -230,7 +262,9 @@ read_loop(void* arg)
 
     switch (msg_type) {
     case DVAP_MSG_TARGET_ITEM_RESPONSE:
-      printf("rx: item response\n");
+      pthread_mutex_lock(&(ctx->rxq_mutex));
+      queue_insert(&(ctx->rxq), &buf[2], ret-2);
+      pthread_mutex_unlock(&(ctx->rxq_mutex));
       break;
     case DVAP_MSG_TARGET_UNSOLICITED:
       parse_rx_unsolicited(&buf[2], ret-2);

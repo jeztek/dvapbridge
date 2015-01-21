@@ -9,7 +9,9 @@ static device_t* device_ptr;
 void
 interrupt()
 {
-  dvap_stop(device_ptr);
+  if (!dvap_stop(device_ptr)) {
+    fprintf(stderr, "Error stopping DVAP device\n");
+  }
 }
 
 int 
@@ -31,8 +33,9 @@ main(int argc, char* argv[])
     printf("Name: %s\n", buf);
   }
 
-  if (!set_runstate(&ctx, DVAP_RUN_STATE_RUN)) {
-    fprintf(stderr, "Error setting DVAP run state to RUN\n");
+  if (!dvap_start(&ctx)) {
+    fprintf(stderr, "Error starting DVAP device\n");
+    return -1;
   }
 
   // Block until dvap_stop() is called

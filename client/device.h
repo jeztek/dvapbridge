@@ -2,6 +2,7 @@
 #define DEVICE_H
 
 #include <pthread.h>
+#include "queue.h"
 
 #define DVAP_BAUD 230400
 
@@ -89,12 +90,50 @@
 typedef struct {
   int fd;
 
+  queue_t rxq;
+  pthread_mutex_t rxq_mutex;
+
+  queue_t txq;
+  pthread_mutex_t txq_mutex;
+
   int shutdown;
   pthread_mutex_t shutdown_mutex;
 
   pthread_t rx_thread;
 
 } device_t;
+
+typedef struct {
+  unsigned char header[2];
+  unsigned char audio[320];
+} dvap_fm_data_t;
+
+typedef struct {
+  unsigned char header[2];
+  unsigned char stream_id[2];
+  unsigned char frame_pos;
+  unsigned char seq;
+  unsigned char flags1;
+  unsigned char flags2;
+  unsigned char flags3;
+  unsigned char rpt1[8];
+  unsigned char rpt2[8];
+  unsigned char urcall[8];
+  unsigned char mycall[8];
+  unsigned char mysuffix[4];
+  unsigned char pfcs[2];
+} dvap_dstar_header_t;
+
+typedef struct {
+  unsigned char header[2];
+  unsigned char stream_id0[2];
+  unsigned char stream_id1[2];
+  unsigned char seq : 5;
+  unsigned char header_flag : 1;
+  unsigned char end_of_stream_flag : 1;
+  unsigned char using_prev_header_packet_flag : 1;
+  unsigned char data[12];
+} dvap_dstar_data_t;
 
 typedef struct {
   char msg_type;
@@ -106,13 +145,15 @@ int get_name(device_t* ctx, char* name, int name_len);
 int set_runstate(device_t* ctx, char state);
 
 int dvap_init(device_t* ctx);
+int dvap_start(device_t* ctx);
 void dvap_wait(device_t* ctx);
-void dvap_stop(device_t* ctx);
+int dvap_stop(device_t* ctx);
 int dvap_write(int fd, char msg_type, int command, unsigned char* payload, 
                int payload_bytes);
 int dvap_read(int fd, char* msg_type, unsigned char* buf, int buf_bytes);
 
 int should_shutdown();
+void* write_loop(void* arg);
 void* read_loop(void* arg);
 void parse_rx_unsolicited(unsigned char* buf, int buf_len);
 

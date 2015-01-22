@@ -10,6 +10,9 @@ all: $(TARGET)
 $(TARGET): common.c serial.c device.c main.c queue.c
 	$(CC) $(FLAGS) -Wall -o $@ $^ $(INCLUDES) $(LIBS)
 
+qtest: qtest.c queue.c
+	$(CC) -Wall -o $@ $^
+
 .PHONY: clean
 
 clean:

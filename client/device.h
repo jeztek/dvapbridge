@@ -90,15 +90,13 @@
 typedef struct {
   int fd;
 
-  queue_t rxq;
-  pthread_mutex_t rxq_mutex;
-
-  queue_t txq;
-  pthread_mutex_t txq_mutex;
-
   int shutdown;
   pthread_mutex_t shutdown_mutex;
 
+  pthread_mutex_t tx_mutex;
+  pthread_t watchdog_thread;
+
+  queue_t rxq;
   pthread_t rx_thread;
 
 } device_t;
@@ -148,12 +146,13 @@ int dvap_init(device_t* ctx);
 int dvap_start(device_t* ctx);
 void dvap_wait(device_t* ctx);
 int dvap_stop(device_t* ctx);
-int dvap_write(int fd, char msg_type, int command, unsigned char* payload, 
-               int payload_bytes);
-int dvap_read(int fd, char* msg_type, unsigned char* buf, int buf_bytes);
+int dvap_write(device_t* ctx, char msg_type, int command,
+               unsigned char* payload, int payload_bytes);
+int dvap_read(device_t* ctx, char* msg_type, unsigned char* buf,
+              int buf_bytes);
 
 int should_shutdown();
-void* write_loop(void* arg);
+void* watchdog_loop(void* arg);
 void* read_loop(void* arg);
 void parse_rx_unsolicited(unsigned char* buf, int buf_len);
 

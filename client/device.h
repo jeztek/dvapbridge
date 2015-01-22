@@ -140,7 +140,27 @@ typedef struct {
 } rx_message;
 
 int get_name(device_t* ctx, char* name, int name_len);
-int set_runstate(device_t* ctx, char state);
+int get_serial(device_t* ctx, char* serial, int serial_len);
+int get_interface_version(device_t* ctx, float* version);
+int get_firmware_version(device_t* ctx, float* bootcode, float* firmware);
+int get_status_code(device_t* ctx, char* code);
+int get_tx_frequency_limits(device_t* ctx, unsigned int* lower,
+                            unsigned int* upper);
+int get_band_scan(device_t* ctx, unsigned int num_steps, char step_size,
+                  unsigned int start_freq_hz);
+
+int set_run_state(device_t* ctx, char state);
+int set_modulation_type(device_t* ctx, char modulation);
+int set_operation_mode(device_t* ctx, char mode);
+int set_squelch_threshold(device_t* ctx, int dbm);
+int set_external_tr_control_mode(device_t* ctx, char mode);
+int set_led_control_dvap(device_t* ctx);
+int set_led_control_host(device_t* ctx, unsigned int yellow, unsigned int red,
+                         unsigned int green);
+int set_rx_frequency(device_t* ctx, unsigned int hz);
+int set_tx_frequency(device_t* ctx, unsigned int hz);
+int set_rxtx_frequency(device_t* ctx, unsigned int hz);
+int set_tx_power(device_t* ctx, int dbm);
 
 int dvap_init(device_t* ctx);
 int dvap_start(device_t* ctx);
@@ -155,5 +175,6 @@ int should_shutdown();
 void* watchdog_loop(void* arg);
 void* read_loop(void* arg);
 void parse_rx_unsolicited(unsigned char* buf, int buf_len);
+void print_operational_status(unsigned char* buf, int buf_len);
 
 #endif

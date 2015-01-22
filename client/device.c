@@ -28,22 +28,11 @@ get_name(device_t* ctx, char* name, int name_len)
   ret = (ret <= name_len) ? ret : name_len;
   strncpy(name, (const char *)&buf[2], ret);
 
-  /*
-  ret = dvap_read(ctx->fd, &msg_type, buf, DVAP_MSG_MAX_BYTES);
-  if (ret <= 0) {
-    debug_print("%s\n", "get_name: error on dvap_read");
-    return FALSE;
-  }
-  ret -= 4;
-  ret = (ret <= name_len) ? ret : name_len;
-  strncpy(name, &buf[4], ret);
-  printf("msg_type: %d\n", msg_type);
-  */
   return TRUE;
 }
 
 int
-set_runstate(device_t* ctx, char state)
+set_run_state(device_t* ctx, char state)
 {
   int sent, ret;
   unsigned char payload[1];
@@ -55,7 +44,130 @@ set_runstate(device_t* ctx, char state)
   sent = dvap_write(ctx, DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_RUN_STATE,
                     payload, 1);
   if (sent <= 0) {
-    debug_print("%s\n", "set_runstate: error on dvap_write");
+    debug_print("%s\n", "set_run_state: error on dvap_write");
+    return FALSE;
+  }
+
+  queue_remove(&(ctx->rxq), buf, &ret);
+
+  return TRUE;
+}
+
+int
+set_modulation_type(device_t* ctx, char modulation)
+{
+  int sent, ret;
+  unsigned char payload[1];
+  unsigned char buf[DVAP_MSG_MAX_BYTES];
+
+  if (!ctx) return FALSE;
+
+  payload[0] = modulation;
+  sent = dvap_write(ctx, DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_MODULATION_TYPE,
+                    payload, 1);
+  if (sent <= 0) {
+    debug_print("%s\n", "set_modulation_type: error on dvap_write");
+    return FALSE;
+  }
+
+  queue_remove(&(ctx->rxq), buf, &ret);
+
+  return TRUE;
+}
+
+int
+set_operation_mode(device_t* ctx, char mode)
+{
+  int sent, ret;
+  unsigned char payload[1];
+  unsigned char buf[DVAP_MSG_MAX_BYTES];
+
+  if (!ctx) return FALSE;
+
+  payload[0] = mode;
+  sent = dvap_write(ctx, DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_OPERATION_MODE,
+                    payload, 1);
+  if (sent <= 0) {
+    debug_print("%s\n", "set_operation_mode: error on dvap_write");
+    return FALSE;
+  }
+
+  queue_remove(&(ctx->rxq), buf, &ret);
+
+  return TRUE;
+}
+
+int
+set_squelch_threshold(device_t* ctx, int dbm)
+{
+  int sent, ret;
+  int squelch = dbm;
+  unsigned char payload[1];
+  unsigned char buf[DVAP_MSG_MAX_BYTES];
+
+  if (!ctx) return FALSE;
+
+  squelch = (dbm < DVAP_SQUELCH_MIN) ? DVAP_SQUELCH_MIN : squelch;
+  squelch = (dbm < DVAP_SQUELCH_MAX) ? DVAP_SQUELCH_MAX : squelch;
+
+  payload[0] = squelch & 0xFF;
+  sent = dvap_write(ctx, DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_SQUELCH_THRESH,
+                    payload, 1);
+  if (sent <= 0) {
+    debug_print("%s\n", "set_squelch_threshold: error on dvap_write");
+    return FALSE;
+  }
+
+  queue_remove(&(ctx->rxq), buf, &ret);
+
+  return TRUE;
+}
+
+int
+set_rxtx_frequency(device_t* ctx, unsigned int hz)
+{
+  int sent, ret;
+  unsigned char payload[4];
+  unsigned char buf[DVAP_MSG_MAX_BYTES];
+
+  if (!ctx) return FALSE;
+
+  payload[0] = hz & 0xFF;
+  payload[1] = (hz >> 8) & 0xFF;
+  payload[2] = (hz >> 16) & 0xFF;
+  payload[3] = (hz >> 24) & 0xFF;
+
+  sent = dvap_write(ctx, DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_TX_RX_FREQ,
+                    payload, 4);
+  if (sent <= 0) {
+    debug_print("%s\n", "set_rxtx_frequency: error on dvap_write");
+    return FALSE;
+  }
+
+  queue_remove(&(ctx->rxq), buf, &ret);
+
+  return TRUE;
+}
+
+int set_tx_power(device_t* ctx, int dbm)
+{
+  int sent, ret;
+  int power;
+  unsigned char payload[2];
+  unsigned char buf[DVAP_MSG_MAX_BYTES];
+
+  if (!ctx) return FALSE;
+
+  power = (dbm < DVAP_TX_POWER_MIN) ? DVAP_TX_POWER_MIN : dbm;
+  power = (dbm > DVAP_TX_POWER_MAX) ? DVAP_TX_POWER_MAX : dbm;
+
+  payload[0] = power & 0xFF;
+  payload[1] = (power >> 8) & 0xFF;
+
+  sent = dvap_write(ctx, DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_TX_RX_FREQ,
+                    payload, 2);
+  if (sent <= 0) {
+    debug_print("%s\n", "set_tx_power: error on dvap_write");
     return FALSE;
   }
 
@@ -96,7 +208,7 @@ dvap_start(device_t* ctx)
 {
   if (!ctx) return FALSE;
 
-  if (!set_runstate(ctx, DVAP_RUN_STATE_RUN)) {
+  if (!set_run_state(ctx, DVAP_RUN_STATE_RUN)) {
     fprintf(stderr, "Error setting DVAP run state to RUN\n");
     return FALSE;
   }
@@ -122,7 +234,7 @@ dvap_stop(device_t* ctx)
 {
   if (!ctx) return FALSE;
 
-  if (!set_runstate(ctx, DVAP_RUN_STATE_STOP)) {
+  if (!set_run_state(ctx, DVAP_RUN_STATE_STOP)) {
     fprintf(stderr, "Error setting DVAP run state to STOP\n");
     return FALSE;
   }
@@ -225,10 +337,6 @@ dvap_read(device_t* ctx, char* msg_type, unsigned char* buf, int buf_bytes)
     received_bytes += n;
   }
 
-  if (DEBUG) {
-    hex_dump("rx", buf, received_bytes);
-  }
-
   if (msg_type) {
     *msg_type = (buf[1] & 0xE0) >> 5;
   }
@@ -294,6 +402,9 @@ read_loop(void* arg)
     switch (msg_type) {
     case DVAP_MSG_TARGET_ITEM_RESPONSE:
       queue_insert(&(ctx->rxq), &buf[2], ret-2);
+      if (DEBUG) {
+        hex_dump("rx", buf, ret);
+      }
       break;
     case DVAP_MSG_TARGET_UNSOLICITED:
       parse_rx_unsolicited(&buf[2], ret-2);
@@ -313,10 +424,24 @@ parse_rx_unsolicited(unsigned char* buf, int buf_len)
   int ctrl_code = (buf[1] << 8) + buf[0];
   switch (ctrl_code) {
   case DVAP_CTRL_OPERATIONAL_STATUS:
-    printf("rx: operational status\n");
+    //print_operational_status(buf, buf_len);
     break;
   default:
+    if (DEBUG) {
+      hex_dump("rx", buf, buf_len);
+    }
     printf("rx: unsolicited other\n");
     break;
   }
+}
+
+void
+print_operational_status(unsigned char* buf, int buf_len)
+{
+  char rssi = buf[2];
+  char squelch = buf[3];
+  char fifo_free = buf[4];
+
+  printf("rssi: %04d, squelch: %d, tx fifo free: %03d\n", rssi, squelch,
+         fifo_free);
 }

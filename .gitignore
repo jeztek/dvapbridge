@@ -2,4 +2,5 @@
 *.o
 #*
 client/client
+client/qtest
 server/server

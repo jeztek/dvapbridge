@@ -124,6 +124,59 @@ set_squelch_threshold(device_t* ctx, int dbm)
 }
 
 int
+set_rx_frequency(device_t* ctx, unsigned int hz)
+{
+  int sent, ret;
+  unsigned char payload[4];
+  unsigned char buf[DVAP_MSG_MAX_BYTES];
+
+  if (!ctx) return FALSE;
+
+  payload[0] = hz & 0xFF;
+  payload[1] = (hz >> 8) & 0xFF;
+  payload[2] = (hz >> 16) & 0xFF;
+  payload[3] = (hz >> 24) & 0xFF;
+
+  sent = dvap_write(ctx, DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_RX_FREQ,
+                    payload, 4);
+  if (sent <= 0) {
+    debug_print("%s\n", "set_rx_frequency: error on dvap_write");
+    return FALSE;
+  }
+
+  queue_remove(&(ctx->rxq), buf, &ret);
+
+  return TRUE;
+}
+
+int
+set_tx_frequency(device_t* ctx, unsigned int hz)
+{
+  int sent, ret;
+  unsigned char payload[4];
+  unsigned char buf[DVAP_MSG_MAX_BYTES];
+
+  if (!ctx) return FALSE;
+
+  payload[0] = hz & 0xFF;
+  payload[1] = (hz >> 8) & 0xFF;
+  payload[2] = (hz >> 16) & 0xFF;
+  payload[3] = (hz >> 24) & 0xFF;
+
+  printf("Setting tx frequency %02X\n", DVAP_CTRL_TX_FREQ);
+  sent = dvap_write(ctx, DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_TX_FREQ,
+                    payload, 4);
+  if (sent <= 0) {
+    debug_print("%s\n", "set_tx_frequency: error on dvap_write");
+    return FALSE;
+  }
+
+  queue_remove(&(ctx->rxq), buf, &ret);
+
+  return TRUE;
+}
+
+int
 set_rxtx_frequency(device_t* ctx, unsigned int hz)
 {
   int sent, ret;
@@ -266,7 +319,7 @@ dvap_write(device_t* ctx, char msg_type, int command, unsigned char* payload,
   buf[1] = (msg_type << 5) | ((pktlen & 0x1F00) >> 8);
 
   buf[2] = command & 0xFF;
-  buf[3] = (command << 8) & 0xFF;
+  buf[3] = (command >> 8) & 0xFF;
 
   if (DEBUG) {
     hex_dump("tx", buf, 4);

@@ -462,6 +462,21 @@ read_loop(void* arg)
     case DVAP_MSG_TARGET_UNSOLICITED:
       parse_rx_unsolicited(&buf[2], ret-2);
       break;
+    case DVAP_MSG_TARGET_RANGE_RESPONSE:
+      break;
+    case DVAP_MSG_TARGET_DATA_ACK:
+      break;
+    case DVAP_MSG_TARGET_DATA_ITEM_0:
+      rx_fm_data(ctx, buf, ret);
+      break;
+    case DVAP_MSG_TARGET_DATA_ITEM_1:
+      rx_gmsk_header(ctx, buf, ret);
+      break;
+    case DVAP_MSG_TARGET_DATA_ITEM_2:
+      rx_gmsk_data(ctx, buf, ret);
+      break;
+    case DVAP_MSG_TARGET_DATA_ITEM_3:
+      break;
     default:
       printf("rx: other response type: %d\n", msg_type);
 
@@ -498,3 +513,84 @@ print_operational_status(unsigned char* buf, int buf_len)
   printf("rssi: %04d, squelch: %d, tx fifo free: %03d\n", rssi, squelch,
          fifo_free);
 }
+
+int 
+rx_fm_data(device_t* ctx, unsigned char* data, int data_len)
+{
+  hex_dump("fm data", data, 2);
+  return 0;
+}
+
+int 
+rx_gmsk_header(device_t* ctx, unsigned char* data, int data_len)
+{
+  hex_dump("gmsk header", data, data_len);
+  return 0;
+}
+
+int 
+rx_gmsk_data(device_t* ctx, unsigned char* data, int data_len)
+{
+  hex_dump("gmsk data", data, 4);
+  return 0;
+}
+
+int 
+tx_data(device_t* ctx, unsigned char* header, unsigned char* data, 
+        int data_len)
+{
+  int n;
+  int sent_bytes = 0;
+  
+  pthread_mutex_lock(&(ctx->tx_mutex));
+  n = write(ctx->fd, header, 2);
+  pthread_mutex_unlock(&(ctx->tx_mutex));
+  if (n <= 0) {
+    debug_print("tx_data - returned %d\n", n);
+    return n;
+  }
+  sent_bytes += n;
+
+  pthread_mutex_lock(&(ctx->tx_mutex));
+  n = write(ctx->fd, data, data_len);
+  pthread_mutex_unlock(&(ctx->tx_mutex));
+  if (n <= 0) {
+    debug_print("tx_data - returned %d\n", n);
+    return n;
+  }
+  sent_bytes += n;
+
+  return sent_bytes;
+}
+
+/*
+int 
+tx_fm_data(device_t* ctx, unsigned char* data)
+{
+  unsigned char header[2];
+  header[0] = 0x42;
+  header[1] = 0x81;
+
+  return tx_data(ctx, header, data, 320);
+}
+
+int 
+tx_gmsk_header(device_t* ctx, unsigned char* data)
+{
+  unsigned char header[2];
+  header[0] = 0x2F;
+  header[1] = 0xA0;
+  
+  return tx_data(ctx, header, data, 45);
+}
+
+int
+tx_gmsk_data(device_t* ctx, unsigned char* data)
+{
+  unsigned char header[2];
+  header[0] = 0x2F;
+  header[1] = 0xA0;
+  
+  return tx_data(ctx, header, data, 45);
+}
+*/

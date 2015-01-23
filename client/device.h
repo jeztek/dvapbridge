@@ -174,7 +174,21 @@ int dvap_read(device_t* ctx, char* msg_type, unsigned char* buf,
 int should_shutdown();
 void* watchdog_loop(void* arg);
 void* read_loop(void* arg);
+
 void parse_rx_unsolicited(unsigned char* buf, int buf_len);
 void print_operational_status(unsigned char* buf, int buf_len);
 
+int rx_fm_data(device_t* ctx, unsigned char* data, int data_len);
+int rx_gmsk_header(device_t* ctx, unsigned char* data, int data_len);
+int rx_gmsk_data(device_t* ctx, unsigned char* data, int data_len);
+
+int tx_data(device_t* ctx, unsigned char* header, unsigned char* data,
+            int data_len);
+/*
+int tx_fm_data(device_t* ctx, unsigned char* data, int data_len);
+
+int tx_gmsk_header(device_t* ctx, unsigned char* data, int data_len);
+
+int tx_gmsk_data(device_t* ctx, unsigned char* data, int data_len);
+*/
 #endif

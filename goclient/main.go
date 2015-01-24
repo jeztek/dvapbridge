@@ -8,7 +8,7 @@ import (
 	"syscall"
 )
 
-import dvap "dev.jeztek.com/dvapbridge/client/lib"
+import dvap "dev.jeztek.com/dvapbridge/goclient/lib"
 
 			// TODO: handle DVAP operational status 0x0090
 			// TODO: handle VAP PTT State 0x0118

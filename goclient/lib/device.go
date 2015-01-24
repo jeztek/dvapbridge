@@ -402,7 +402,7 @@ func (c *Config) serialRxLoop() {
 		fmt.Printf("rx waiting for data...\n")
 
 		// Receive header
-		n, err := c.serial.Read(buf[receivedBytes:])
+		n, err := c.serial.Read(buf[0:2])
 		if n == 0 {
 			fmt.Printf("rx timeout\n")
 
@@ -416,14 +416,6 @@ func (c *Config) serialRxLoop() {
 		}
 		if err != nil {
 			log.Fatal(err)
-		}
-		for receivedBytes < expectedBytes {
-			n, err := c.serial.Read(buf[receivedBytes:])
-			if n == 0 || err != nil {
-				log.Fatal(err)
-			}
-			receivedBytes += n
-			fmt.Printf("rx got %d bytes\n", n)
 		}
 
 		// Receive rest of packet

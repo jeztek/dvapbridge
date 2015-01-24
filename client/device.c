@@ -303,10 +303,11 @@ dvap_write(device_t* ctx, char msg_type, int command, unsigned char* payload,
            int payload_bytes)
 {
   int n;
-  int sent_bytes = 0;
+  int total_sent_bytes = 0;
+  int payload_sent_bytes = 0;
   unsigned char buf[4];
   int pktlen;
-  
+
   if (!ctx) return -1;
 
   if (payload_bytes > DVAP_MSG_MAX_BYTES-4) {
@@ -325,30 +326,35 @@ dvap_write(device_t* ctx, char msg_type, int command, unsigned char* payload,
     hex_dump("tx", buf, 4);
   }
 
-  pthread_mutex_lock(&(ctx->tx_mutex));
-  n = write(ctx->fd, &buf[0], 4);
-  pthread_mutex_unlock(&(ctx->tx_mutex));
-  if (n <= 0) {
-    debug_print("dvap_write - returned %d\n", n);
-    return n;
-  }
-  sent_bytes += n;
-
-  if (payload) {
-    if (DEBUG) {
-      hex_dump("tx payload", payload, payload_bytes);
-    }
+  while(total_sent_bytes < 4) {
     pthread_mutex_lock(&(ctx->tx_mutex));
-    n = write(ctx->fd, payload, payload_bytes);
+    n = write(ctx->fd, &buf[total_sent_bytes], 4-total_sent_bytes);
     pthread_mutex_unlock(&(ctx->tx_mutex));
     if (n <= 0) {
       debug_print("dvap_write - returned %d\n", n);
       return n;
     }
-    sent_bytes += n;
+    total_sent_bytes += n;
   }
 
-  return sent_bytes;
+  if (payload) {
+    if (DEBUG) {
+      hex_dump("tx payload", payload, payload_bytes);
+    }
+    while(payload_sent_bytes < payload_bytes) {
+      pthread_mutex_lock(&(ctx->tx_mutex));
+      n = write(ctx->fd, &payload[payload_sent_bytes],
+                payload_bytes-payload_sent_bytes);
+      pthread_mutex_unlock(&(ctx->tx_mutex));
+      if (n <= 0) {
+        debug_print("dvap_write - returned %d\n", n);
+        return n;
+      }
+      payload_sent_bytes += n;
+      total_sent_bytes += n;
+    }
+  }
+  return total_sent_bytes;
 }
 
 int
@@ -432,6 +438,26 @@ watchdog_loop(void* arg)
   return NULL;
 }
 
+int
+tx_data(device_t* ctx, unsigned char* data, int data_len)
+{
+  int n;
+  int sent_bytes = 0;
+
+  while (sent_bytes < data_len) {
+    pthread_mutex_lock(&(ctx->tx_mutex));
+    n = write(ctx->fd, &data[sent_bytes], data_len-sent_bytes);
+    pthread_mutex_unlock(&(ctx->tx_mutex));
+    if (n <= 0) {
+      debug_print("tx_data - returned %d\n", n);
+      return n;
+    }
+    sent_bytes += n;
+  }
+
+  return sent_bytes;
+}
+
 void* 
 read_loop(void* arg)
 {
@@ -454,6 +480,7 @@ read_loop(void* arg)
 
     switch (msg_type) {
     case DVAP_MSG_TARGET_ITEM_RESPONSE:
+    case DVAP_MSG_TARGET_RANGE_RESPONSE:
       queue_insert(&(ctx->rxq), &buf[2], ret-2);
       if (DEBUG) {
         hex_dump("rx", buf, ret);
@@ -462,24 +489,17 @@ read_loop(void* arg)
     case DVAP_MSG_TARGET_UNSOLICITED:
       parse_rx_unsolicited(&buf[2], ret-2);
       break;
-    case DVAP_MSG_TARGET_RANGE_RESPONSE:
-      break;
     case DVAP_MSG_TARGET_DATA_ACK:
       break;
     case DVAP_MSG_TARGET_DATA_ITEM_0:
-      rx_fm_data(ctx, buf, ret);
-      break;
     case DVAP_MSG_TARGET_DATA_ITEM_1:
-      rx_gmsk_header(ctx, buf, ret);
-      break;
     case DVAP_MSG_TARGET_DATA_ITEM_2:
-      rx_gmsk_data(ctx, buf, ret);
-      break;
     case DVAP_MSG_TARGET_DATA_ITEM_3:
+      parse_rx_data(buf, ret);
       break;
     default:
-      printf("rx: other response type: %d\n", msg_type);
-
+      fprintf(stderr, "rx: unrecognized response type: %d\n", msg_type);
+      break;
     }
   }
 
@@ -494,6 +514,12 @@ parse_rx_unsolicited(unsigned char* buf, int buf_len)
   case DVAP_CTRL_OPERATIONAL_STATUS:
     //print_operational_status(buf, buf_len);
     break;
+  case DVAP_CTRL_PTT_STATE:
+    print_ptt_state(buf, buf_len);
+    break;
+  case DVAP_CTRL_DTMF_MSG:
+    print_dtmf(buf, buf_len);
+    break;
   default:
     if (DEBUG) {
       hex_dump("rx", buf, buf_len);
@@ -504,93 +530,66 @@ parse_rx_unsolicited(unsigned char* buf, int buf_len)
 }
 
 void
+parse_rx_data(unsigned char* buf, int buf_len)
+{
+  unsigned int header;
+  if (buf_len < 2) return;
+  header = (buf[1] << 8) + buf[0];
+
+  switch(header) {
+  // FM data
+  case 0x8142:
+    hex_dump("fm data", buf, 2);
+    break;
+  // GMSK header
+  case 0xA02F:
+    hex_dump("gmsk header", buf, buf_len);
+    break;
+  // GMSK data
+  case 0xC012:
+    if (buf_len < 4) return;
+    hex_dump("gmsk data", buf, 4);
+    break;
+  default:
+    fprintf(stderr, "parse_rx_data: unrecognized data\n");
+    break;
+  }
+}
+
+void
 print_operational_status(unsigned char* buf, int buf_len)
 {
-  char rssi = buf[2];
-  char squelch = buf[3];
-  char fifo_free = buf[4];
+  char rssi, squelch, fifo_free;
+  if (buf_len < 5) return;
+
+  rssi = buf[2];
+  squelch = buf[3];
+  fifo_free = buf[4];
 
   printf("rssi: %04d, squelch: %d, tx fifo free: %03d\n", rssi, squelch,
          fifo_free);
 }
 
-int 
-rx_fm_data(device_t* ctx, unsigned char* data, int data_len)
+void
+print_ptt_state(unsigned char* buf, int buf_len)
 {
-  hex_dump("fm data", data, 2);
-  return 0;
-}
-
-int 
-rx_gmsk_header(device_t* ctx, unsigned char* data, int data_len)
-{
-  hex_dump("gmsk header", data, data_len);
-  return 0;
-}
-
-int 
-rx_gmsk_data(device_t* ctx, unsigned char* data, int data_len)
-{
-  hex_dump("gmsk data", data, 4);
-  return 0;
-}
-
-int 
-tx_data(device_t* ctx, unsigned char* header, unsigned char* data, 
-        int data_len)
-{
-  int n;
-  int sent_bytes = 0;
-  
-  pthread_mutex_lock(&(ctx->tx_mutex));
-  n = write(ctx->fd, header, 2);
-  pthread_mutex_unlock(&(ctx->tx_mutex));
-  if (n <= 0) {
-    debug_print("tx_data - returned %d\n", n);
-    return n;
+  if (buf_len < 3) return;
+  if (buf[2] <= 0) {
+    printf("ptt: receive active\n");
   }
-  sent_bytes += n;
-
-  pthread_mutex_lock(&(ctx->tx_mutex));
-  n = write(ctx->fd, data, data_len);
-  pthread_mutex_unlock(&(ctx->tx_mutex));
-  if (n <= 0) {
-    debug_print("tx_data - returned %d\n", n);
-    return n;
+  else {
+    printf("ptt: transmit active\n");
   }
-  sent_bytes += n;
-
-  return sent_bytes;
 }
 
-/*
-int 
-tx_fm_data(device_t* ctx, unsigned char* data)
+void
+print_dtmf(unsigned char* buf, int buf_len)
 {
-  unsigned char header[2];
-  header[0] = 0x42;
-  header[1] = 0x81;
-
-  return tx_data(ctx, header, data, 320);
+  if (buf_len < 3) return;
+  if (buf[2] == 0) {
+    printf("dtmf: release\n");
+  }
+  else {
+    printf("dtmf: %c\n", buf[2]);
+  }
 }
-
-int 
-tx_gmsk_header(device_t* ctx, unsigned char* data)
-{
-  unsigned char header[2];
-  header[0] = 0x2F;
-  header[1] = 0xA0;
-  
-  return tx_data(ctx, header, data, 45);
-}
-
-int
-tx_gmsk_data(device_t* ctx, unsigned char* data)
-{
-  unsigned char header[2];
-  header[0] = 0x2F;
-  header[1] = 0xA0;
-  
-  return tx_data(ctx, header, data, 45);
-}
-*/

@@ -5,7 +5,7 @@
 #include <pthread.h>
 
 #define QUEUE_SIZE	 10
-#define QUEUE_ENTRY_SIZE 8191
+#define QUEUE_ENTRY_SIZE 8191	// should match device.h:DVAP_MSG_MAX_BYTES
 
 typedef struct {
   unsigned char data[QUEUE_SIZE + 1][QUEUE_ENTRY_SIZE];

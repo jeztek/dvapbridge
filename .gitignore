@@ -3,4 +3,5 @@
 #*
 client/client
 client/qtest
+client/nettest
 server/server

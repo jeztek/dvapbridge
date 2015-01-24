@@ -18,23 +18,23 @@ serial_open(char* portname, int speed)
   fd = open(portname, O_RDWR | O_NOCTTY | O_NONBLOCK);
   if (fd < 0) {
     fprintf(stderr, "Error opening port %s\n", portname);
-    return FALSE;
+    return -1;
   }
 
   memset(&tty, 0, sizeof(tty));
   if (tcgetattr(fd, &tty) != 0) {
     fprintf(stderr, "Error getting port attributes\n");
-    return FALSE;
+    return -1;
   }
   
   if (ioctl(fd, TIOCEXCL) != 0) {
     fprintf(stderr, "Error setting serial port TIOCEXCL flag\n");
-    return FALSE;
+    return -1;
   }
   
   if (fcntl(fd, F_SETFL, 0) != 0) {
     fprintf(stderr, "Error clearing serial port O_NONBLOCK flag\n");
-    return FALSE;
+    return -1;
   }
 
   cfmakeraw(&tty);
@@ -47,17 +47,17 @@ serial_open(char* portname, int speed)
 
   if (cfsetispeed(&tty, speed) != 0) {
     fprintf(stderr, "Error setting serial port input speed\n");
-    return FALSE;
+    return -1;
   }
 
   if (cfsetospeed(&tty, speed) != 0) {
     fprintf(stderr, "Error setting serial port output speed\n");
-    return FALSE;
+    return -1;
   }
 
   if (tcsetattr(fd, TCSAFLUSH, &tty) != 0) {
     fprintf(stderr, "Error setting port attributes\n");
-    return FALSE;
+    return -1;
   }
 
   return fd;
@@ -80,7 +80,7 @@ serial_open(char* portname, int speed)
 
   if (tcsetattr(fd, TCSANOW, &tty) != 0) {
     perror("Error setting port attributes\n");
-    return FALSE;
+    return -1;
   }
   */
 }

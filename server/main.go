@@ -17,7 +17,7 @@ const (
 	CONN_MAX_SIZE = 8191
 )
 
-// Control message
+// Message
 type MsgType int
 const (
 	MsgDisconnect MsgType = iota
@@ -60,8 +60,12 @@ type Server struct {
 
 func (server *Server) PrintClients() {
 	fmt.Println("Clients:")
-	for k := range server.clients {
-		fmt.Println(k)
+	if len(server.clients) > 0 {
+		for k := range server.clients {
+			fmt.Printf("  %s\n", k)
+		}
+	} else {
+		fmt.Println("  None")
 	}
 }
 
@@ -75,7 +79,7 @@ func (server *Server) Broadcast(msg Message) {
 
 func (server *Server) Join(connection net.Conn) {
 	client := NewClient(connection)
-	server.clients[connection.RemoteAddr().String()] = client
+	server.clients[client.id] = client
 	server.PrintClients()
 	go func() {
 		for {
@@ -84,7 +88,7 @@ func (server *Server) Join(connection net.Conn) {
 	}()
 }
 
-func (server *Server) Control(msg Message) {
+func (server *Server) Disconnect(msg Message) {
 	if msg.msgtype == MsgDisconnect {
 		delete(server.clients, msg.sender)
 		server.PrintClients()
@@ -97,7 +101,7 @@ func (server *Server) Listen() {
 			select {
 			case msg := <-server.incoming:
 				if msg.msgtype == MsgDisconnect {
-					server.Control(msg)
+					server.Disconnect(msg)
 				} else if msg.msgtype == MsgData {
 					server.Broadcast(msg)
 				}

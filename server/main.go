@@ -2,27 +2,33 @@ package main
 
 import (
 	"bufio"
-    "fmt"
+	"fmt"
 	"io"
-    "net"
-    "os"
+	"net"
+	"os"
 )
 
 // Server parameters
 const (
-    CONN_HOST = "localhost"
-    CONN_PORT = "8001"
-    CONN_TYPE = "tcp"
+	CONN_HOST = "localhost"
+	CONN_PORT = "8001"
+	CONN_TYPE = "tcp"
+
+	DEBUG_HOST = "localhost"
+	DEBUG_PORT = "8002"
+	DEBUG_TYPE = "tcp"
 
 	CONN_MAX_SIZE = 8191
 )
 
 // Message
 type MsgType int
+
 const (
 	MsgDisconnect MsgType = iota
 	MsgData       MsgType = iota
 )
+
 type Message struct {
 	msgtype MsgType
 	sender  string
@@ -31,23 +37,22 @@ type Message struct {
 
 func main() {
 	server := NewServer()
-	l, err := net.Listen(CONN_TYPE, CONN_HOST + ":" + CONN_PORT)
-    if err != nil {
-        fmt.Printf("Error listening on %s:%s: %s", CONN_HOST, CONN_PORT,
+	fd, err := net.Listen(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
+	if err != nil {
+		fmt.Printf("Error listening on %s:%s: %s", CONN_HOST, CONN_PORT,
 			err.Error())
-        os.Exit(1)
-    }
+		os.Exit(1)
+	}
+	defer fd.Close()
 
-	defer l.Close()
-
-    fmt.Println("Listening on " + CONN_HOST + ":" + CONN_PORT)
+	fmt.Println("Listening on " + CONN_HOST + ":" + CONN_PORT)
 	for {
-		conn, err := l.Accept()
-        if err != nil {
-            fmt.Println("Error accepting connection: ", err.Error())
-            os.Exit(1)
-        }
-		server.joins <-conn
+		conn, err := fd.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
+		server.joins <- conn
 	}
 }
 
@@ -136,10 +141,10 @@ func (client *Client) Read() {
 	data := make([]byte, CONN_MAX_SIZE)
 	for {
 		n, err := client.reader.Read(data)
-		if (err == io.EOF) {
+		if err == io.EOF {
 			fmt.Printf("Client disconnected\n")
 			break
-		} else if (err != nil) {
+		} else if err != nil {
 			fmt.Printf("Error reading from client, disconnecting...\n")
 			break
 		} else {
@@ -159,7 +164,7 @@ func (client *Client) Write() {
 	for msg := range client.outgoing {
 		_, err := client.writer.Write(msg.data)
 		client.writer.Flush()
-		if (err != nil) {
+		if err != nil {
 			fmt.Printf("Error writing to client\n")
 			continue
 		}

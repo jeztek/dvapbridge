@@ -54,7 +54,6 @@ func main() {
 type Server struct {
 	clients  map[string]*Client
 	joins    chan net.Conn
-	control  chan Message
 	incoming chan Message
 	outgoing chan Message
 }
@@ -75,7 +74,7 @@ func (server *Server) Broadcast(msg Message) {
 }
 
 func (server *Server) Join(connection net.Conn) {
-	client := NewClient(connection, server)
+	client := NewClient(connection)
 	server.clients[connection.RemoteAddr().String()] = client
 	server.PrintClients()
 	go func() {
@@ -96,12 +95,14 @@ func (server *Server) Listen() {
 	go func() {
 		for {
 			select {
-			case data := <-server.incoming:
-				server.Broadcast(data)
+			case msg := <-server.incoming:
+				if msg.msgtype == MsgDisconnect {
+					server.Control(msg)
+				} else if msg.msgtype == MsgData {
+					server.Broadcast(msg)
+				}
 			case conn := <-server.joins:
 				server.Join(conn)
-			case msg := <-server.control:
-				server.Control(msg)
 			}
 		}
 	}()
@@ -111,7 +112,6 @@ func NewServer() *Server {
 	server := &Server{
 		clients:  make(map[string]*Client),
 		joins:    make(chan net.Conn),
-		control:  make(chan Message),
 		incoming: make(chan Message),
 		outgoing: make(chan Message),
 	}
@@ -126,7 +126,6 @@ type Client struct {
 	outgoing   chan Message
 	reader     *bufio.Reader
 	writer     *bufio.Writer
-	server     *Server
 }
 
 func (client *Client) Read() {
@@ -144,10 +143,12 @@ func (client *Client) Read() {
 		}
 	}
 
+	// Stop Write() for loop and close connection
+	close(client.outgoing)
 	(*client.connection).Close()
 
 	// Notify server of disconnect
-	client.server.control <- Message{MsgDisconnect, client.id, []byte{}}
+	client.incoming <- Message{MsgDisconnect, client.id, []byte{}}
 }
 
 func (client *Client) Write() {
@@ -159,15 +160,9 @@ func (client *Client) Write() {
 			continue
 		}
 	}
-	fmt.Printf("%s Write() exiting\n", client.id)
 }
 
-func (client *Client) Listen() {
-	go client.Read()
-	go client.Write()
-}
-
-func NewClient(connection net.Conn, server *Server) *Client {
+func NewClient(connection net.Conn) *Client {
 	client := &Client{
 		id:         connection.RemoteAddr().String(),
 		connection: &connection,
@@ -175,8 +170,11 @@ func NewClient(connection net.Conn, server *Server) *Client {
 		outgoing:   make(chan Message),
 		reader:     bufio.NewReader(connection),
 		writer:     bufio.NewWriter(connection),
-		server:     server,
 	}
-	client.Listen()
+
+	// Start read and write threads
+	go client.Read()
+	go client.Write()
+
 	return client
 }

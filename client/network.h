@@ -2,6 +2,7 @@
 #define NETWORK_H
 
 #include <limits.h>
+#include <pthread.h>
 
 #ifndef HOST_NAME_MAX
 #define HOST_NAME_MAX 64
@@ -15,8 +16,18 @@ typedef struct {
 
   int fd;
 
+  int shutdown;
+  pthread_mutex_t shutdown_mutex;
+
+  pthread_t rx_thread;
 } network_t;
 
-int net_connect(network_t* ctx, char* hostname, int port);
+int net_init(network_t* ctx, char* hostname, int port);
+int net_connect(network_t* ctx);
+void net_wait(network_t* ctx);
+void net_stop(network_t* ctx);
+
+int should_shutdown(network_t* ctx);
+void* net_read_loop(void* arg);
 
 #endif

@@ -1,5 +1,6 @@
 #include <pthread.h>
 #include <stdio.h>
+#include <sys/select.h>
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
@@ -463,11 +464,28 @@ read_loop(void* arg)
 {
   device_t* ctx = (device_t *)arg;
 
+  fd_set set;
   char msg_type;
-  char ret;
+  int ret;
   unsigned char buf[DVAP_MSG_MAX_BYTES];
 
+  struct timeval timeout;
+  timeout.tv_sec = 0;
+  timeout.tv_usec = 10000;
+
   while(!should_shutdown(ctx)) {
+    FD_ZERO(&set);
+    FD_SET(ctx->fd, &set);
+    ret = select(ctx->fd+1, &set, NULL, NULL, &timeout);
+    if (ret < 0) {
+      fprintf(stderr, "Error waiting for data from DVAP\n");
+      return NULL;
+    }
+    else if (ret == 0) {
+      debug_print("%s\n", "DVAP select timeout");
+      continue;
+    }
+
     ret = dvap_read(ctx, &msg_type, buf, DVAP_MSG_MAX_BYTES);
     if (ret < 0) {
       fprintf(stderr, "Error reading from DVAP\n");
@@ -476,7 +494,7 @@ read_loop(void* arg)
     else if (ret == 0) {
       debug_print("%s\n", "DVAP read timeout");
       continue;
-    } 
+    }
 
     switch (msg_type) {
     case DVAP_MSG_TARGET_ITEM_RESPONSE:

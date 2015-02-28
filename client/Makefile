@@ -13,7 +13,7 @@ $(TARGET): common.c serial.c device.c main.c queue.c
 qtest: qtest.c queue.c
 	$(CC) -Wall -o $@ $^
 
-nettest: nettest.c network.c
+nettest: common.c nettest.c network.c
 	$(CC) -Wall -o $@ $^
 
 .PHONY: clean

@@ -171,7 +171,7 @@ int dvap_write(device_t* ctx, char msg_type, int command,
 int dvap_read(device_t* ctx, char* msg_type, unsigned char* buf,
               int buf_bytes);
 
-int should_shutdown();
+int should_shutdown(device_t* ctx);
 void* watchdog_loop(void* arg);
 int tx_data(device_t* ctx, unsigned char* data, int data_len);
 

@@ -1,20 +1,38 @@
-#include "common.h"
-#include "network.h"
-
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
+#include <sys/select.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-
-//#include <errno.h>
 #include <netdb.h>
 
+#include "common.h"
+#include "network.h"
+
+int
+net_init(network_t* ctx, char* hostname, int port)
+{
+  strncpy(ctx->host, hostname, HOST_NAME_MAX);
+  ctx->host[HOST_NAME_MAX] = 0;
+  ctx->port = port;
+
+  ctx->shutdown = FALSE;
+  pthread_mutex_init(&(ctx->shutdown_mutex), NULL);
+
+  if (!net_connect(ctx)) {
+    return FALSE;
+  }
+
+  pthread_create(&(ctx->rx_thread), NULL, net_read_loop, ctx);
+  return TRUE;
+}
+
 int 
-net_connect(network_t* ctx, char* hostname, int port)
+net_connect(network_t* ctx)
 {
   int fd, ret;
   char portstr[6];
@@ -22,11 +40,7 @@ net_connect(network_t* ctx, char* hostname, int port)
   struct addrinfo* servinfo;
   struct addrinfo* p;
 
-  strncpy(ctx->host, hostname, HOST_NAME_MAX);
-  ctx->host[HOST_NAME_MAX] = 0;
-  ctx->port = port;
-
-  snprintf(portstr, 6, "%d", port);
+  snprintf(portstr, 6, "%d", ctx->port);
 
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_UNSPEC;
@@ -58,26 +72,67 @@ net_connect(network_t* ctx, char* hostname, int port)
   return TRUE;
 }
 
-/*
-int main(int argc, char *argv[])
+void
+net_wait(network_t* ctx)
 {
-  int sockfd, numbytes;  
-  char buf[MAXDATASIZE];
-  struct addrinfo hints, *servinfo, *p;
-  int rv;
-  char s[INET6_ADDRSTRLEN];
+  if (!ctx) return;
+  pthread_join(ctx->rx_thread, NULL);
+  close(ctx->fd);
 
-  if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
-    perror("recv");
-    exit(1);
+  pthread_mutex_destroy(&(ctx->shutdown_mutex));
+}
+
+void
+net_stop(network_t* ctx)
+{
+  pthread_mutex_lock(&(ctx->shutdown_mutex));
+  ctx->shutdown = TRUE;
+  pthread_mutex_unlock(&(ctx->shutdown_mutex));
+}
+
+int
+should_shutdown(network_t* ctx)
+{
+  int shutdown;
+  if (!ctx) return TRUE;
+
+  pthread_mutex_lock(&(ctx->shutdown_mutex));
+  shutdown = ctx->shutdown;
+  pthread_mutex_unlock(&(ctx->shutdown_mutex));
+  return shutdown;
+}
+
+void*
+net_read_loop(void* arg)
+{
+  network_t* ctx = (network_t *)arg;
+
+  int ret;
+  unsigned char buf[100];
+
+  fd_set set;
+  struct timeval timeout;
+  int rv;
+
+  timeout.tv_sec = 0;
+  timeout.tv_usec = 10000;
+
+  while(!should_shutdown(ctx)) {
+    FD_ZERO(&set);
+    FD_SET(ctx->fd, &set);
+
+    rv = select(ctx->fd + 1, &set, NULL, NULL, &timeout);
+    if (rv < 0) {
+      fprintf(stderr, "net_read_loop error\n");
+    }
+    else if (rv == 0) {
+      //fprintf(stderr, "net_read_loop timeout\n");
+    }
+    else {
+      ret = read(ctx->fd, &buf, 100);
+      hex_dump("net rx", buf, ret);
+    }
   }
 
-  buf[numbytes] = '\0';
-
-  printf("client: received '%s'\n",buf);
-
-  close(sockfd);
-
-  return 0;
+  return NULL;
 }
-*/

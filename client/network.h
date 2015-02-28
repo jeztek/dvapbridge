@@ -8,7 +8,8 @@
 #define HOST_NAME_MAX 64
 #endif
 
-#define NET_MAX_SIZE 8191	// should match device.h:DVAP_MSG_MAX_BYTES
+#define NET_READ_TIMEOUT_USEC 10000
+#define NET_MAX_SIZE          8191 // should match device.h:DVAP_MSG_MAX_BYTES
 
 typedef struct {  
   char host[HOST_NAME_MAX + 1];

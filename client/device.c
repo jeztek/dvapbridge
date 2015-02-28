@@ -471,7 +471,7 @@ read_loop(void* arg)
 
   struct timeval timeout;
   timeout.tv_sec = 0;
-  timeout.tv_usec = 10000;
+  timeout.tv_usec = DVAP_READ_TIMEOUT_USEC;
 
   while(!should_shutdown(ctx)) {
     FD_ZERO(&set);

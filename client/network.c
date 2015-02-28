@@ -108,14 +108,14 @@ net_read_loop(void* arg)
   network_t* ctx = (network_t *)arg;
 
   int ret;
-  unsigned char buf[100];
+  unsigned char buf[NET_MAX_SIZE];
 
   fd_set set;
   struct timeval timeout;
   int rv;
 
   timeout.tv_sec = 0;
-  timeout.tv_usec = 10000;
+  timeout.tv_usec = NET_READ_TIMEOUT_USEC;
 
   while(!should_shutdown(ctx)) {
     FD_ZERO(&set);
@@ -129,7 +129,7 @@ net_read_loop(void* arg)
       //fprintf(stderr, "net_read_loop timeout\n");
     }
     else {
-      ret = read(ctx->fd, &buf, 100);
+      ret = read(ctx->fd, &buf, NET_MAX_SIZE);
       hex_dump("net rx", buf, ret);
     }
   }

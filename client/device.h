@@ -4,7 +4,8 @@
 #include <pthread.h>
 #include "queue.h"
 
-#define DVAP_BAUD 230400
+#define DVAP_BAUD                    230400
+#define DVAP_READ_TIMEOUT_USEC       10000
 
 #define DVAP_MSG_HOST_SET_CTRL       0x00
 #define DVAP_MSG_HOST_REQ_CTRL_ITEM  0x01

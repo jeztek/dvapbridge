@@ -82,6 +82,13 @@ net_wait(network_t* ctx)
   pthread_mutex_destroy(&(ctx->shutdown_mutex));
 }
 
+int
+net_read(network_t* ctx, char* msg_type, unsigned char* buf, int buf_bytes)
+{
+  if (!ctx) return -1;
+  return packet_read(ctx->fd, msg_type, buf, buf_bytes);
+}
+
 void
 net_stop(network_t* ctx)
 {
@@ -91,7 +98,7 @@ net_stop(network_t* ctx)
 }
 
 int
-should_shutdown(network_t* ctx)
+net_should_shutdown(network_t* ctx)
 {
   int shutdown;
   if (!ctx) return TRUE;
@@ -107,31 +114,39 @@ net_read_loop(void* arg)
 {
   network_t* ctx = (network_t *)arg;
 
-  int ret;
-  unsigned char buf[NET_MAX_SIZE];
-
   fd_set set;
-  struct timeval timeout;
-  int rv;
+  char msg_type;
+  int ret;
+  unsigned char buf[NET_MAX_BYTES];
 
+  struct timeval timeout;
   timeout.tv_sec = 0;
   timeout.tv_usec = NET_READ_TIMEOUT_USEC;
 
-  while(!should_shutdown(ctx)) {
+  while(!net_should_shutdown(ctx)) {
     FD_ZERO(&set);
     FD_SET(ctx->fd, &set);
+    ret = select(ctx->fd + 1, &set, NULL, NULL, &timeout);
+    if (ret < 0) {
+      fprintf(stderr, "Error waiting for data from network\n");
+      return NULL;
+    }
+    else if (ret == 0) {
+      //debug_print("%s\n", "network select timeout");
+      continue;
+    }
 
-    rv = select(ctx->fd + 1, &set, NULL, NULL, &timeout);
-    if (rv < 0) {
-      fprintf(stderr, "net_read_loop error\n");
+    ret = net_read(ctx, &msg_type, buf, NET_MAX_BYTES);
+    if (ret < 0) {
+      fprintf(stderr, "Error reading from network\n");
+      return NULL;
     }
-    else if (rv == 0) {
-      //fprintf(stderr, "net_read_loop timeout\n");
+    else if (ret == 0) {
+      fprintf(stderr, "Timeout while reading from network\n");
+      return NULL;
     }
-    else {
-      ret = read(ctx->fd, &buf, NET_MAX_SIZE);
-      hex_dump("net rx", buf, ret);
-    }
+
+    hex_dump("net rx", buf, ret);
   }
 
   return NULL;

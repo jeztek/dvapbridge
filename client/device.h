@@ -172,16 +172,16 @@ int dvap_write(device_t* ctx, char msg_type, int command,
 int dvap_read(device_t* ctx, char* msg_type, unsigned char* buf,
               int buf_bytes);
 
-int should_shutdown(device_t* ctx);
-void* watchdog_loop(void* arg);
-int tx_data(device_t* ctx, unsigned char* data, int data_len);
+int dvap_should_shutdown(device_t* ctx);
+void* dvap_watchdog_loop(void* arg);
+int dvap_tx_data(device_t* ctx, unsigned char* data, int data_len);
 
-void* read_loop(void* arg);
-void parse_rx_unsolicited(unsigned char* buf, int buf_len);
-void parse_rx_data(unsigned char* buf, int buf_len);
+void* dvap_read_loop(void* arg);
+void dvap_parse_rx_unsolicited(unsigned char* buf, int buf_len);
+void dvap_parse_rx_data(unsigned char* buf, int buf_len);
 
-void print_operational_status(unsigned char* buf, int buf_len);
-void print_ptt_state(unsigned char* buf, int buf_len);
-void print_dtmf(unsigned char* buf, int buf_len);
+void dvap_print_operational_status(unsigned char* buf, int buf_len);
+void dvap_print_ptt_state(unsigned char* buf, int buf_len);
+void dvap_print_dtmf(unsigned char* buf, int buf_len);
 
 #endif

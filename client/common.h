@@ -19,5 +19,6 @@
 #endif
 
 void hex_dump(char* prefix, unsigned char* buf, int buf_len);
+int packet_read(int fd, char* msg_type, unsigned char* buf, int buf_bytes);
 
 #endif

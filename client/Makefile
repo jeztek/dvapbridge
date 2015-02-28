@@ -7,7 +7,7 @@ LIBS = -L/usr/local/lib
 
 all: $(TARGET)
 
-$(TARGET): common.c serial.c device.c main.c queue.c
+$(TARGET): common.c device.c main.c network.c queue.c serial.c
 	$(CC) $(FLAGS) -Wall -o $@ $^ $(INCLUDES) $(LIBS)
 
 qtest: qtest.c queue.c

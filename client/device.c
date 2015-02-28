@@ -251,7 +251,7 @@ dvap_init(device_t* ctx)
 
   // receive queue
   queue_init(&(ctx->rxq));
-  pthread_create(&(ctx->rx_thread), NULL, read_loop, ctx);
+  pthread_create(&(ctx->rx_thread), NULL, dvap_read_loop, ctx);
 
   return TRUE;
 }
@@ -267,7 +267,7 @@ dvap_start(device_t* ctx)
     return FALSE;
   }
 
-  pthread_create(&(ctx->watchdog_thread), NULL, watchdog_loop, ctx);
+  pthread_create(&(ctx->watchdog_thread), NULL, dvap_watchdog_loop, ctx);
   return TRUE;
 }
 
@@ -361,51 +361,12 @@ dvap_write(device_t* ctx, char msg_type, int command, unsigned char* payload,
 int
 dvap_read(device_t* ctx, char* msg_type, unsigned char* buf, int buf_bytes)
 {
-  int expected_bytes = 2;
-  int received_bytes = 0;
-  int n;
-
   if (!ctx) return -1;
-
-  if (buf_bytes < expected_bytes) {
-    fprintf(stderr, "dvap_read - buf_bytes too small\n");
-    return -1;
-  }
-
-  // Receive header
-  n = read(ctx->fd, &buf[0], expected_bytes);
-  if (n <= 0) {
-    debug_print("dvap_read - returned %d\n", n);
-    return n;
-  }
-  received_bytes += n;
-
-  // Determine how much data to expect
-  expected_bytes = buf[0] + ((buf[1] & 0x1F) << 8);
-  if (expected_bytes >= buf_bytes) {
-    fprintf(stderr, "dvap_read - expected %d bytes but only %d bytes available\n", expected_bytes, buf_bytes);
-    return -1;
-  }
-
-  // Receive rest of packet
-  while (received_bytes < expected_bytes) {
-    n = read(ctx->fd, &buf[received_bytes], expected_bytes-received_bytes);
-    if (n <= 0) {
-      debug_print("dvap_read - returned %d\n", n);
-      return n;
-    }
-    received_bytes += n;
-  }
-
-  if (msg_type) {
-    *msg_type = (buf[1] & 0xE0) >> 5;
-  }
-
-  return received_bytes;
+  return packet_read(ctx->fd, msg_type, buf, buf_bytes);
 }
 
 int
-should_shutdown(device_t* ctx)
+dvap_should_shutdown(device_t* ctx)
 {
   int shutdown;
   if (!ctx) return TRUE;
@@ -417,7 +378,7 @@ should_shutdown(device_t* ctx)
 }
 
 void*
-watchdog_loop(void* arg)
+dvap_watchdog_loop(void* arg)
 {
   device_t* ctx = (device_t *)arg;
   unsigned char buf[3];
@@ -426,7 +387,7 @@ watchdog_loop(void* arg)
   buf[1] = 0x60;
   buf[2] = 0x00;
 
-  while (!should_shutdown(ctx)) {
+  while (!dvap_should_shutdown(ctx)) {
     pthread_mutex_lock(&(ctx->tx_mutex));
     if (DEBUG) {
       hex_dump("tx", buf, 3);
@@ -440,7 +401,7 @@ watchdog_loop(void* arg)
 }
 
 int
-tx_data(device_t* ctx, unsigned char* data, int data_len)
+dvap_tx_data(device_t* ctx, unsigned char* data, int data_len)
 {
   int n;
   int sent_bytes = 0;
@@ -460,7 +421,7 @@ tx_data(device_t* ctx, unsigned char* data, int data_len)
 }
 
 void* 
-read_loop(void* arg)
+dvap_read_loop(void* arg)
 {
   device_t* ctx = (device_t *)arg;
 
@@ -473,7 +434,7 @@ read_loop(void* arg)
   timeout.tv_sec = 0;
   timeout.tv_usec = DVAP_READ_TIMEOUT_USEC;
 
-  while(!should_shutdown(ctx)) {
+  while(!dvap_should_shutdown(ctx)) {
     FD_ZERO(&set);
     FD_SET(ctx->fd, &set);
     ret = select(ctx->fd+1, &set, NULL, NULL, &timeout);
@@ -482,7 +443,7 @@ read_loop(void* arg)
       return NULL;
     }
     else if (ret == 0) {
-      debug_print("%s\n", "DVAP select timeout");
+      //debug_print("%s\n", "DVAP select timeout");
       continue;
     }
 
@@ -492,8 +453,8 @@ read_loop(void* arg)
       return NULL;
     }
     else if (ret == 0) {
-      debug_print("%s\n", "DVAP read timeout");
-      continue;
+      fprintf(stderr, "Timeout while reading from DVAP\n");
+      return NULL;
     }
 
     switch (msg_type) {
@@ -505,7 +466,7 @@ read_loop(void* arg)
       }
       break;
     case DVAP_MSG_TARGET_UNSOLICITED:
-      parse_rx_unsolicited(&buf[2], ret-2);
+      dvap_parse_rx_unsolicited(&buf[2], ret-2);
       break;
     case DVAP_MSG_TARGET_DATA_ACK:
       break;
@@ -513,7 +474,7 @@ read_loop(void* arg)
     case DVAP_MSG_TARGET_DATA_ITEM_1:
     case DVAP_MSG_TARGET_DATA_ITEM_2:
     case DVAP_MSG_TARGET_DATA_ITEM_3:
-      parse_rx_data(buf, ret);
+      dvap_parse_rx_data(buf, ret);
       break;
     default:
       fprintf(stderr, "rx: unrecognized response type: %d\n", msg_type);
@@ -525,7 +486,7 @@ read_loop(void* arg)
 }
 
 void
-parse_rx_unsolicited(unsigned char* buf, int buf_len)
+dvap_parse_rx_unsolicited(unsigned char* buf, int buf_len)
 {
   int ctrl_code = (buf[1] << 8) + buf[0];
   switch (ctrl_code) {
@@ -533,10 +494,10 @@ parse_rx_unsolicited(unsigned char* buf, int buf_len)
     //print_operational_status(buf, buf_len);
     break;
   case DVAP_CTRL_PTT_STATE:
-    print_ptt_state(buf, buf_len);
+    dvap_print_ptt_state(buf, buf_len);
     break;
   case DVAP_CTRL_DTMF_MSG:
-    print_dtmf(buf, buf_len);
+    dvap_print_dtmf(buf, buf_len);
     break;
   default:
     if (DEBUG) {
@@ -548,7 +509,7 @@ parse_rx_unsolicited(unsigned char* buf, int buf_len)
 }
 
 void
-parse_rx_data(unsigned char* buf, int buf_len)
+dvap_parse_rx_data(unsigned char* buf, int buf_len)
 {
   unsigned int header;
   if (buf_len < 2) return;
@@ -575,7 +536,7 @@ parse_rx_data(unsigned char* buf, int buf_len)
 }
 
 void
-print_operational_status(unsigned char* buf, int buf_len)
+dvap_print_operational_status(unsigned char* buf, int buf_len)
 {
   char rssi, squelch, fifo_free;
   if (buf_len < 5) return;
@@ -589,7 +550,7 @@ print_operational_status(unsigned char* buf, int buf_len)
 }
 
 void
-print_ptt_state(unsigned char* buf, int buf_len)
+dvap_print_ptt_state(unsigned char* buf, int buf_len)
 {
   if (buf_len < 3) return;
   if (buf[2] <= 0) {
@@ -601,7 +562,7 @@ print_ptt_state(unsigned char* buf, int buf_len)
 }
 
 void
-print_dtmf(unsigned char* buf, int buf_len)
+dvap_print_dtmf(unsigned char* buf, int buf_len)
 {
   if (buf_len < 3) return;
   if (buf[2] == 0) {

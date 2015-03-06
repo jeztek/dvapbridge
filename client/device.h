@@ -88,7 +88,10 @@
 #define DVAP_BAND_SCAN_FREQ_MIN      144000000
 #define DVAP_BAND_SCAN_FREQ_MAX      148000000
 
+typedef void (*dvap_rx_fptr)(unsigned char*, int);
+
 typedef struct {
+  dvap_rx_fptr callback;
   int fd;
 
   int shutdown;
@@ -110,7 +113,10 @@ typedef struct {
 typedef struct {
   unsigned char header[2];
   unsigned char stream_id[2];
-  unsigned char frame_pos;
+  unsigned char frame_pos : 5;
+  unsigned char using_prev_header_packet_flag : 1;
+  unsigned char end_of_stream_flag : 1;
+  unsigned char header_flag : 1;
   unsigned char seq;
   unsigned char flags1;
   unsigned char flags2;
@@ -123,16 +129,26 @@ typedef struct {
   unsigned char pfcs[2];
 } dvap_dstar_header_t;
 
+union dvap_dstar_header_union {
+  dvap_dstar_header_t header;
+  unsigned char bytes[47];
+};
+
 typedef struct {
   unsigned char header[2];
-  unsigned char stream_id0[2];
-  unsigned char stream_id1[2];
-  unsigned char seq : 5;
-  unsigned char header_flag : 1;
-  unsigned char end_of_stream_flag : 1;
+  unsigned char stream_id[2];
+  unsigned char frame_pos : 5;
   unsigned char using_prev_header_packet_flag : 1;
+  unsigned char end_of_stream_flag : 1;
+  unsigned char header_flag : 1;
+  unsigned char seq;
   unsigned char data[12];
 } dvap_dstar_data_t;
+
+union dvap_dstar_data_union {
+  dvap_dstar_data_t data;
+  unsigned char bytes[18];
+};
 
 typedef struct {
   char msg_type;
@@ -163,7 +179,7 @@ int set_tx_frequency(device_t* ctx, unsigned int hz);
 int set_rxtx_frequency(device_t* ctx, unsigned int hz);
 int set_tx_power(device_t* ctx, int dbm);
 
-int dvap_init(device_t* ctx);
+int dvap_init(device_t* ctx, dvap_rx_fptr callback);
 int dvap_start(device_t* ctx);
 void dvap_wait(device_t* ctx);
 int dvap_stop(device_t* ctx);
@@ -178,7 +194,6 @@ int dvap_tx_data(device_t* ctx, unsigned char* data, int data_len);
 
 void* dvap_read_loop(void* arg);
 void dvap_parse_rx_unsolicited(unsigned char* buf, int buf_len);
-void dvap_parse_rx_data(unsigned char* buf, int buf_len);
 
 void dvap_print_operational_status(unsigned char* buf, int buf_len);
 void dvap_print_ptt_state(unsigned char* buf, int buf_len);

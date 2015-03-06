@@ -1,16 +1,58 @@
 #include <signal.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "common.h"
 #include "device.h"
+#include "device_gmsk.h"
+#include "network.h"
 
+#define PORT 8001
+
+static network_t* network_ptr;
 static device_t* device_ptr;
 
 void
 interrupt()
 {
+  net_stop(network_ptr);
   if (!dvap_stop(device_ptr)) {
     fprintf(stderr, "Error stopping DVAP device\n");
+  }
+}
+
+void net_rx_callback(unsigned char* buf, int buf_bytes)
+{
+  write(device_ptr->fd, buf, buf_bytes);
+}
+
+void dvap_rx_callback(unsigned char* buf, int buf_len)
+{
+  unsigned int header;
+  if (buf_len < 2) return;
+  header = (buf[1] << 8) + buf[0];
+
+  switch(header) {
+  // FM data
+  case 0x8142:
+    hex_dump("fm data", buf, 2);
+    break;
+  // GMSK header
+  case 0xA02F:
+    //hex_dump("gmsk header", buf, buf_len);
+    gmsk_parse_header(buf, buf_len);
+    net_write(network_ptr, buf, buf_len);
+    break;
+  // GMSK data
+  case 0xC012:
+    if (buf_len < 4) return;
+    //hex_dump("gmsk data", buf, 4);
+    gmsk_parse_data(buf, buf_len);
+    net_write(network_ptr, buf, buf_len);
+    break;
+  default:
+    fprintf(stderr, "dvap_rx_callback: unrecognized data\n");
+    break;
   }
 }
 
@@ -18,19 +60,32 @@ int
 main(int argc, char* argv[])
 {
   char buf[20];
-  device_t ctx;
+  network_t n_ctx;
+  device_t d_ctx;
+
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <server>\n", argv[0]);
+    return -1;
+  }
 
   // Configure CTRL+C handler
-  device_ptr = &ctx;
+  network_ptr = &n_ctx;
+  device_ptr = &d_ctx;
   signal(SIGINT, interrupt);
 
-  if (!dvap_init(&ctx)) {
+  if (!net_init(&n_ctx, argv[1], PORT, &net_rx_callback)) {
+    fprintf(stderr, "Error connecting to %s on port %d\n", argv[1], PORT);
+    return -1;
+  }
+  printf("Connected to %s on port %d\n", argv[1], PORT);
+
+  if (!dvap_init(&d_ctx, &dvap_rx_callback)) {
     fprintf(stderr, "Error initializing DVAP device\n");
     return -1;
   }
 
-  if (get_name(&ctx, buf, 20)) {
-    printf("Name: %s\n", buf);
+  if (get_name(&d_ctx, buf, 20)) {
+    printf("Device name: %s\n", buf);
   }
 
   /*
@@ -51,19 +106,20 @@ main(int argc, char* argv[])
     [set run state]   tx: 05 00 18 00 00   rx: 05 00 18 00 00
    */
 
-  //set_operation_mode(&ctx, DVAP_OPERATION_NORMAL);
-  //set_squelch_threshold(&ctx, -80);
-  //set_tx_power(&ctx, -12);
-  set_rx_frequency(&ctx, 145670000);
-  set_tx_frequency(&ctx, 145670000);
-  set_modulation_type(&ctx, DVAP_MODULATION_GMSK);
+  //set_operation_mode(&d_ctx, DVAP_OPERATION_NORMAL);
+  //set_squelch_threshold(&d_ctx, -80);
+  //set_tx_power(&d_ctx, -12);
+  set_rx_frequency(&d_ctx, 145670000);
+  set_tx_frequency(&d_ctx, 145670000);
+  set_modulation_type(&d_ctx, DVAP_MODULATION_GMSK);
 
-  if (!dvap_start(&ctx)) {
+  if (!dvap_start(&d_ctx)) {
     fprintf(stderr, "Error starting DVAP device\n");
     return -1;
   }
 
-  // Block until dvap_stop() is called
-  dvap_wait(&ctx);
+  // Block until net_stop() and dvap_stop() are called
+  net_wait(&n_ctx);
+  dvap_wait(&d_ctx);
   return 0;
 }

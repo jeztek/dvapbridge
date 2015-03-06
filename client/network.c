@@ -14,8 +14,10 @@
 #include "network.h"
 
 int
-net_init(network_t* ctx, char* hostname, int port)
+net_init(network_t* ctx, char* hostname, int port, net_rx_fptr callback)
 {
+  ctx->callback = callback;
+
   strncpy(ctx->host, hostname, HOST_NAME_MAX);
   ctx->host[HOST_NAME_MAX] = 0;
   ctx->port = port;
@@ -83,6 +85,12 @@ net_wait(network_t* ctx)
 }
 
 int
+net_write(network_t* ctx, unsigned char* buf, int buf_bytes)
+{
+  return send(ctx->fd, buf, buf_bytes, 0);
+}
+
+int
 net_read(network_t* ctx, char* msg_type, unsigned char* buf, int buf_bytes)
 {
   if (!ctx) return -1;
@@ -147,6 +155,7 @@ net_read_loop(void* arg)
     }
 
     hex_dump("net rx", buf, ret);
+    (ctx->callback)(buf, ret);
   }
 
   return NULL;

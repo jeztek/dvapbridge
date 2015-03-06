@@ -231,10 +231,12 @@ int set_tx_power(device_t* ctx, int dbm)
 }
 
 int
-dvap_init(device_t* ctx)
+dvap_init(device_t* ctx, dvap_rx_fptr callback)
 {
   int fd;
   if (!ctx) return FALSE;
+
+  ctx->callback = callback;
 
   // serial port
   fd = serial_open("/dev/tty.usbserial-A602S3VR", B230400);
@@ -300,7 +302,7 @@ dvap_stop(device_t* ctx)
 }
 
 int
-dvap_write(device_t* ctx, char msg_type, int command, unsigned char* payload, 
+dvap_write(device_t* ctx, char msg_type, int command, unsigned char* payload,
            int payload_bytes)
 {
   int n;
@@ -390,7 +392,7 @@ dvap_watchdog_loop(void* arg)
   while (!dvap_should_shutdown(ctx)) {
     pthread_mutex_lock(&(ctx->tx_mutex));
     if (DEBUG) {
-      hex_dump("tx", buf, 3);
+      //hex_dump("tx", buf, 3);
     }
     write(ctx->fd, buf, 3);
     pthread_mutex_unlock(&(ctx->tx_mutex));
@@ -474,7 +476,7 @@ dvap_read_loop(void* arg)
     case DVAP_MSG_TARGET_DATA_ITEM_1:
     case DVAP_MSG_TARGET_DATA_ITEM_2:
     case DVAP_MSG_TARGET_DATA_ITEM_3:
-      dvap_parse_rx_data(buf, ret);
+      (ctx->callback)(buf, ret);
       break;
     default:
       fprintf(stderr, "rx: unrecognized response type: %d\n", msg_type);
@@ -504,33 +506,6 @@ dvap_parse_rx_unsolicited(unsigned char* buf, int buf_len)
       hex_dump("rx", buf, buf_len);
     }
     printf("rx: unsolicited other\n");
-    break;
-  }
-}
-
-void
-dvap_parse_rx_data(unsigned char* buf, int buf_len)
-{
-  unsigned int header;
-  if (buf_len < 2) return;
-  header = (buf[1] << 8) + buf[0];
-
-  switch(header) {
-  // FM data
-  case 0x8142:
-    hex_dump("fm data", buf, 2);
-    break;
-  // GMSK header
-  case 0xA02F:
-    hex_dump("gmsk header", buf, buf_len);
-    break;
-  // GMSK data
-  case 0xC012:
-    if (buf_len < 4) return;
-    hex_dump("gmsk data", buf, 4);
-    break;
-  default:
-    fprintf(stderr, "parse_rx_data: unrecognized data\n");
     break;
   }
 }

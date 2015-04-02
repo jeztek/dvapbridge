@@ -37,9 +37,18 @@ type Message struct {
 
 func main() {
 	server := NewServer()
+
+	f, err := os.Create("server.log")
+	if err != nil {
+		fmt.Printf("Error creating log file\n")
+		os.Exit(1)
+	}
+	server.log = bufio.NewWriter(f)
+	defer f.Close()
+
 	fd, err := net.Listen(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
 	if err != nil {
-		fmt.Printf("Error listening on %s:%s: %s", CONN_HOST, CONN_PORT,
+		fmt.Printf("Error listening on %s:%s: %s\n", CONN_HOST, CONN_PORT,
 			err.Error())
 		os.Exit(1)
 	}
@@ -61,6 +70,7 @@ type Server struct {
 	joins    chan net.Conn
 	incoming chan Message
 	outgoing chan Message
+	log      *bufio.Writer
 }
 
 func (server *Server) PrintClients() {
@@ -78,6 +88,8 @@ func (server *Server) Broadcast(msg Message) {
 	for _, client := range server.clients {
 		if msg.sender != client.id {
 			client.outgoing <- msg
+		} else {
+			//fmt.Printf("rx from %s\n", client.id);
 		}
 	}
 }
@@ -108,6 +120,8 @@ func (server *Server) Listen() {
 				if msg.msgtype == MsgDisconnect {
 					server.Disconnect(msg)
 				} else if msg.msgtype == MsgData {
+					server.log.Write(msg.data)
+					server.log.Flush()
 					server.Broadcast(msg)
 				}
 			case conn := <-server.joins:

@@ -183,6 +183,7 @@ int dvap_init(device_t* ctx, dvap_rx_fptr callback);
 int dvap_start(device_t* ctx);
 void dvap_wait(device_t* ctx);
 int dvap_stop(device_t* ctx);
+int dvap_pkt_write(device_t* ctx, unsigned char* buf, int buf_bytes);
 int dvap_write(device_t* ctx, char msg_type, int command,
                unsigned char* payload, int payload_bytes);
 int dvap_read(device_t* ctx, char* msg_type, unsigned char* buf,

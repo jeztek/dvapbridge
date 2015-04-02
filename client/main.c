@@ -9,6 +9,12 @@
 
 #define PORT 8001
 
+/* TODO:
+ * Make dvap device single duplex via mutex lock?
+ *   What happens when audio arrives over network while transmitting?
+ * Server should properly route streams destined for a specific user
+ */
+
 static network_t* network_ptr;
 static device_t* device_ptr;
 
@@ -23,7 +29,34 @@ interrupt()
 
 void net_rx_callback(unsigned char* buf, int buf_bytes)
 {
-  write(device_ptr->fd, buf, buf_bytes);
+  unsigned int header;
+  dvap_pkt_write(device_ptr, buf, buf_bytes);
+  return;
+
+  if (buf_bytes < 2) return;
+  header = (buf[1] << 8) + buf[0];
+
+  switch(header) {
+  // FM data
+  case 0x8142:
+    hex_dump("fm data", buf, 2);
+    break;
+  // GMSK header
+  case 0xA02F:
+    //hex_dump("gmsk header", buf, buf_bytes);
+    gmsk_parse_header(buf, buf_bytes);
+    break;
+  // GMSK data
+  case 0xC012:
+    if (buf_bytes < 4) return;
+    //hex_dump("gmsk data", buf, 4);
+    gmsk_parse_data(buf, buf_bytes);
+    break;
+  default:
+    fprintf(stderr, "dvap_rx_callback: unrecognized data\n");
+    hex_dump("net rx", buf, buf_bytes);
+    break;
+  }
 }
 
 void dvap_rx_callback(unsigned char* buf, int buf_len)
@@ -40,14 +73,14 @@ void dvap_rx_callback(unsigned char* buf, int buf_len)
   // GMSK header
   case 0xA02F:
     //hex_dump("gmsk header", buf, buf_len);
-    gmsk_parse_header(buf, buf_len);
+    //gmsk_parse_header(buf, buf_len);
     net_write(network_ptr, buf, buf_len);
     break;
   // GMSK data
   case 0xC012:
     if (buf_len < 4) return;
     //hex_dump("gmsk data", buf, 4);
-    gmsk_parse_data(buf, buf_len);
+    //gmsk_parse_data(buf, buf_len);
     net_write(network_ptr, buf, buf_len);
     break;
   default:

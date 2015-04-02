@@ -302,6 +302,25 @@ dvap_stop(device_t* ctx)
 }
 
 int
+dvap_pkt_write(device_t* ctx, unsigned char* buf, int buf_bytes)
+{
+  int n;
+  int sent_bytes = 0;
+
+  while (sent_bytes < buf_bytes) {
+    pthread_mutex_lock(&(ctx->tx_mutex));
+    n = write(ctx->fd, &buf[sent_bytes], buf_bytes-sent_bytes);
+    pthread_mutex_unlock(&(ctx->tx_mutex));
+    if (n <= 0) {
+      fprintf(stderr, "dvap_pkt_write - error writing to device\n");
+      return -1;
+    }
+    sent_bytes += n;
+  }
+  return sent_bytes;
+}
+
+int
 dvap_write(device_t* ctx, char msg_type, int command, unsigned char* payload,
            int payload_bytes)
 {

@@ -29,11 +29,13 @@ net_init(network_t* ctx, char* hostname, int port, net_rx_fptr callback)
     return FALSE;
   }
 
-  pthread_create(&(ctx->rx_thread), NULL, net_read_loop, ctx);
+  if (ctx->callback) {
+    pthread_create(&(ctx->rx_thread), NULL, net_read_loop, ctx);
+  }
   return TRUE;
 }
 
-int 
+int
 net_connect(network_t* ctx)
 {
   int fd, ret;
@@ -87,7 +89,18 @@ net_wait(network_t* ctx)
 int
 net_write(network_t* ctx, unsigned char* buf, int buf_bytes)
 {
-  return send(ctx->fd, buf, buf_bytes, 0);
+  int n;
+  int sent_bytes = 0;
+
+  while (sent_bytes < buf_bytes) {
+    n = send(ctx->fd, &buf[sent_bytes], buf_bytes-sent_bytes, 0);
+    if (n <= 0) {
+      fprintf(stderr, "net_write - error writing to socket\n");
+      return -1;
+    }
+    sent_bytes += n;
+  }
+  return sent_bytes;
 }
 
 int
@@ -154,8 +167,9 @@ net_read_loop(void* arg)
       return NULL;
     }
 
-    hex_dump("net rx", buf, ret);
-    (ctx->callback)(buf, ret);
+    if (ctx->callback) {
+      (ctx->callback)(buf, ret);
+    }
   }
 
   return NULL;

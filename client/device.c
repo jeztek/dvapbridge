@@ -164,7 +164,6 @@ set_tx_frequency(device_t* ctx, unsigned int hz)
   payload[2] = (hz >> 16) & 0xFF;
   payload[3] = (hz >> 24) & 0xFF;
 
-  printf("Setting tx frequency %02X\n", DVAP_CTRL_TX_FREQ);
   sent = dvap_write(ctx, DVAP_MSG_HOST_SET_CTRL, DVAP_CTRL_TX_FREQ,
                     payload, 4);
   if (sent <= 0) {
@@ -510,9 +509,12 @@ void
 dvap_parse_rx_unsolicited(unsigned char* buf, int buf_len)
 {
   int ctrl_code = (buf[1] << 8) + buf[0];
+  if (ctrl_code != DVAP_CTRL_OPERATIONAL_STATUS) {
+    hex_dump("unsolicited", buf, buf_len);
+  }
   switch (ctrl_code) {
   case DVAP_CTRL_OPERATIONAL_STATUS:
-    //print_operational_status(buf, buf_len);
+    //dvap_print_operational_status(buf, buf_len);
     break;
   case DVAP_CTRL_PTT_STATE:
     dvap_print_ptt_state(buf, buf_len);

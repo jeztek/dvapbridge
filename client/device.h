@@ -88,20 +88,22 @@
 #define DVAP_BAND_SCAN_FREQ_MIN      144000000
 #define DVAP_BAND_SCAN_FREQ_MAX      148000000
 
+// dvap_rx_fptr is a function pointer that takes two arguments,
+// a pointer to a buffer an the length of the buffer
 typedef void (*dvap_rx_fptr)(unsigned char*, int);
 
 typedef struct {
-  dvap_rx_fptr callback;
+  dvap_rx_fptr callback;	  // pointer to rx callback
   int fd;
 
-  int shutdown;
-  pthread_mutex_t shutdown_mutex;
+  int shutdown;			  // set true to shut down rx loop
+  pthread_mutex_t shutdown_mutex; // acquire before using shutdown
 
-  pthread_mutex_t tx_mutex;
-  pthread_t watchdog_thread;
+  pthread_mutex_t tx_mutex;       // acquire before writing to dvap
+  pthread_t watchdog_thread;      // pthread associated with watchdog loop
 
-  queue_t rxq;
-  pthread_t rx_thread;
+  queue_t rxq;			  // queue to hold expected data from dvap
+  pthread_t rx_thread;            // pthread associated with read loop
 
 } device_t;
 

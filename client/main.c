@@ -73,14 +73,14 @@ void dvap_rx_callback(unsigned char* buf, int buf_len)
   // GMSK header
   case 0xA02F:
     //hex_dump("gmsk header", buf, buf_len);
-    //gmsk_parse_header(buf, buf_len);
+    gmsk_parse_header(buf, buf_len);
     net_write(network_ptr, buf, buf_len);
     break;
   // GMSK data
   case 0xC012:
     if (buf_len < 4) return;
     //hex_dump("gmsk data", buf, 4);
-    //gmsk_parse_data(buf, buf_len);
+    gmsk_parse_data(buf, buf_len);
     net_write(network_ptr, buf, buf_len);
     break;
   default:
@@ -142,10 +142,14 @@ main(int argc, char* argv[])
   //set_operation_mode(&d_ctx, DVAP_OPERATION_NORMAL);
   //set_squelch_threshold(&d_ctx, -80);
   //set_tx_power(&d_ctx, -12);
+  printf("cmd - set rx frequency\n");
   set_rx_frequency(&d_ctx, 145670000);
+  printf("cmd - set tx frequency\n");
   set_tx_frequency(&d_ctx, 145670000);
+  printf("cmd - set modulation type\n");
   set_modulation_type(&d_ctx, DVAP_MODULATION_GMSK);
 
+  printf("cmd - dvap start\n");
   if (!dvap_start(&d_ctx)) {
     fprintf(stderr, "Error starting DVAP device\n");
     return -1;

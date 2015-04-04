@@ -76,6 +76,7 @@ int main(int argc, char* argv[])
       }
       sent_bytes += n;
     }
+    sleep_ms(send_bytes);
     if (feof(fp)) {
       break;
     }

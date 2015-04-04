@@ -30,11 +30,13 @@ interrupt()
 void net_rx_callback(unsigned char* buf, int buf_bytes)
 {
   unsigned int header;
-  dvap_pkt_write(device_ptr, buf, buf_bytes);
-  return;
 
   if (buf_bytes < 2) return;
   header = (buf[1] << 8) + buf[0];
+
+  dvap_pkt_write(device_ptr, buf, buf_bytes);
+  sleep_ms(buf_bytes);
+  return;
 
   switch(header) {
   // FM data

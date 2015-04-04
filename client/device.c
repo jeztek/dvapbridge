@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <sys/select.h>
 #include <string.h>
-#include <termios.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -203,7 +202,8 @@ set_rxtx_frequency(device_t* ctx, unsigned int hz)
   return TRUE;
 }
 
-int set_tx_power(device_t* ctx, int dbm)
+int
+set_tx_power(device_t* ctx, int dbm)
 {
   int sent, ret;
   int power;
@@ -239,7 +239,7 @@ dvap_init(device_t* ctx, dvap_rx_fptr callback)
   ctx->callback = callback;
 
   // serial port
-  fd = serial_open("/dev/tty.usbserial-A602S3VR", B230400);
+  fd = serial_open(DVAP_SERIAL_PORT, DVAP_BAUD);
   if (fd < 0) {
     return FALSE;
   }
@@ -249,6 +249,7 @@ dvap_init(device_t* ctx, dvap_rx_fptr callback)
   ctx->shutdown = FALSE;
   pthread_mutex_init(&(ctx->shutdown_mutex), NULL);
 
+  // transmitter variables
   pthread_mutex_init(&(ctx->tx_mutex), NULL);
   pthread_mutex_init(&(ctx->ptt_mutex), NULL);
   ctx->ptt_active = FALSE;
@@ -260,7 +261,6 @@ dvap_init(device_t* ctx, dvap_rx_fptr callback)
   return TRUE;
 }
 
-// Start run loop
 int
 dvap_start(device_t* ctx)
 {
@@ -275,7 +275,6 @@ dvap_start(device_t* ctx)
   return TRUE;
 }
 
-// Block until dvap_stop() is called then cleanly shutdown
 void
 dvap_wait(device_t* ctx)
 {
@@ -288,7 +287,6 @@ dvap_wait(device_t* ctx)
   pthread_mutex_destroy(&(ctx->tx_mutex));
 }
 
-// Shutdown DVAP device and shut down threads
 int
 dvap_stop(device_t* ctx)
 {
@@ -422,12 +420,12 @@ dvap_watchdog_loop(void* arg)
     ptt_active = ctx->ptt_active;
     pthread_mutex_unlock(&(ctx->ptt_mutex));
 
+    // Only send watchdog keepalive message if transmitter is not in use
     if (!ptt_active) {
       pthread_mutex_lock(&(ctx->tx_mutex));
       write(ctx->fd, buf, 3);
       pthread_mutex_unlock(&(ctx->tx_mutex));
       if (DEBUG) {
-        printf("[%ld]", time(NULL));
         hex_dump("watchdog tx", buf, 3);
       }
     }
@@ -452,6 +450,8 @@ dvap_read_loop(void* arg)
   timeout.tv_usec = DVAP_READ_TIMEOUT_USEC;
 
   while(!dvap_should_shutdown(ctx)) {
+    // Check if data is available for reading
+    // Timeout and try again if nothing is available
     FD_ZERO(&set);
     FD_SET(ctx->fd, &set);
     ret = select(ctx->fd+1, &set, NULL, NULL, &timeout);
@@ -464,6 +464,7 @@ dvap_read_loop(void* arg)
       continue;
     }
 
+    // Read packet
     ret = dvap_read(ctx, &msg_type, buf, DVAP_MSG_MAX_BYTES);
     if (ret < 0) {
       fprintf(stderr, "Error reading from DVAP\n");
@@ -474,7 +475,10 @@ dvap_read_loop(void* arg)
       return NULL;
     }
 
+    // Call appropriate handler depending on message type
     switch (msg_type) {
+
+    // Response to a host initiated request
     case DVAP_MSG_TARGET_ITEM_RESPONSE:
     case DVAP_MSG_TARGET_RANGE_RESPONSE:
       queue_insert(&(ctx->rxq), &buf[2], ret-2);
@@ -482,17 +486,24 @@ dvap_read_loop(void* arg)
         hex_dump("rx", buf, ret);
       }
       break;
+
+    // Status message
     case DVAP_MSG_TARGET_UNSOLICITED:
       dvap_parse_rx_unsolicited(ctx, &buf[2], ret-2);
       break;
+
+    // Ignore target data acks for now
     case DVAP_MSG_TARGET_DATA_ACK:
       break;
+
+    // Radio data
     case DVAP_MSG_TARGET_DATA_ITEM_0:
     case DVAP_MSG_TARGET_DATA_ITEM_1:
     case DVAP_MSG_TARGET_DATA_ITEM_2:
     case DVAP_MSG_TARGET_DATA_ITEM_3:
       (ctx->callback)(buf, ret);
       break;
+
     default:
       fprintf(stderr, "rx: unrecognized response type: %d\n", msg_type);
       break;
@@ -506,15 +517,13 @@ void
 dvap_parse_rx_unsolicited(device_t* ctx, unsigned char* buf, int buf_len)
 {
   int ctrl_code = (buf[1] << 8) + buf[0];
-  if (ctrl_code != DVAP_CTRL_OPERATIONAL_STATUS) {
-    hex_dump("unsolicited", buf, buf_len);
-  }
+
   switch (ctrl_code) {
   case DVAP_CTRL_OPERATIONAL_STATUS:
     //dvap_print_operational_status(buf, buf_len);
     break;
   case DVAP_CTRL_PTT_STATE:
-    dvap_print_ptt_state(buf, buf_len);
+    //dvap_print_ptt_state(buf, buf_len);
     pthread_mutex_lock(&(ctx->ptt_mutex));
     if (buf_len >= 3) {
       if (buf[2] <= 0) {
@@ -531,9 +540,8 @@ dvap_parse_rx_unsolicited(device_t* ctx, unsigned char* buf, int buf_len)
     break;
   default:
     if (DEBUG) {
-      hex_dump("rx", buf, buf_len);
+      hex_dump("rx unsolicited other", buf, buf_len);
     }
-    printf("rx: unsolicited other\n");
     break;
   }
 }

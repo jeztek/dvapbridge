@@ -2,9 +2,12 @@
 #define DEVICE_H
 
 #include <pthread.h>
+#include <termios.h>
 #include "queue.h"
 
-#define DVAP_BAUD                    230400
+#define DVAP_BAUD                    B230400
+#define DVAP_SERIAL_PORT	     "/dev/tty.usbserial-A602S3VR"
+
 #define DVAP_READ_TIMEOUT_USEC       10000
 
 #define DVAP_MSG_HOST_SET_CTRL       0x00
@@ -102,8 +105,8 @@ typedef struct {
   pthread_mutex_t tx_mutex;       // acquire before writing to dvap
   pthread_t watchdog_thread;      // pthread associated with watchdog loop
 
-  pthread_mutex_t ptt_mutex;
-  int ptt_active;
+  pthread_mutex_t ptt_mutex;      // acquire before using ptt_activ
+  int ptt_active;                 // true when dvap is transmitting
 
   queue_t rxq;			  // queue to hold expected data from dvap
   pthread_t rx_thread;            // pthread associated with read loop
@@ -162,6 +165,7 @@ typedef struct {
 } rx_message;
 
 int get_name(device_t* ctx, char* name, int name_len);
+/*
 int get_serial(device_t* ctx, char* serial, int serial_len);
 int get_interface_version(device_t* ctx, float* version);
 int get_firmware_version(device_t* ctx, float* bootcode, float* firmware);
@@ -170,27 +174,40 @@ int get_tx_frequency_limits(device_t* ctx, unsigned int* lower,
                             unsigned int* upper);
 int get_band_scan(device_t* ctx, unsigned int num_steps, char step_size,
                   unsigned int start_freq_hz);
-
+*/
 int set_run_state(device_t* ctx, char state);
 int set_modulation_type(device_t* ctx, char modulation);
 int set_operation_mode(device_t* ctx, char mode);
 int set_squelch_threshold(device_t* ctx, int dbm);
+/*
 int set_external_tr_control_mode(device_t* ctx, char mode);
 int set_led_control_dvap(device_t* ctx);
 int set_led_control_host(device_t* ctx, unsigned int yellow, unsigned int red,
                          unsigned int green);
+*/
 int set_rx_frequency(device_t* ctx, unsigned int hz);
 int set_tx_frequency(device_t* ctx, unsigned int hz);
 int set_rxtx_frequency(device_t* ctx, unsigned int hz);
 int set_tx_power(device_t* ctx, int dbm);
 
 int dvap_init(device_t* ctx, dvap_rx_fptr callback);
+
+// Start run loop
 int dvap_start(device_t* ctx);
+
+// Block until dvap_stop() is called then cleanly shutdown
 void dvap_wait(device_t* ctx);
+
+// Shutdown DVAP device and shut down threads
 int dvap_stop(device_t* ctx);
+
+// Used to send packets destined for the radio transmitter
 int dvap_pkt_write(device_t* ctx, unsigned char* buf, int buf_bytes);
+
+// Used to send control commands to the DVAP device
 int dvap_write(device_t* ctx, char msg_type, int command,
                unsigned char* payload, int payload_bytes);
+
 int dvap_read(device_t* ctx, char* msg_type, unsigned char* buf,
               int buf_bytes);
 

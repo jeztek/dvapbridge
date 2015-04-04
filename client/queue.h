@@ -21,8 +21,13 @@ typedef struct {
 
 void queue_init(queue_t* q);
 void queue_delete(queue_t* q);
+
+// NOTE: This call will block if the queue is full
 int queue_insert(queue_t* q, unsigned char* data, int len);
+
+// NOTE: This call will block if the queue is empty
 int queue_remove(queue_t* q, unsigned char* data, int* len);
+
 int queue_is_empty(queue_t* q);
 int queue_is_full(queue_t* q);
 

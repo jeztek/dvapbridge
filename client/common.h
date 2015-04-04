@@ -20,6 +20,8 @@
 
 void sleep_ms(int milliseconds);
 void hex_dump(char* prefix, unsigned char* buf, int buf_len);
+
+// Read DVAP packet - shared by device and network code
 int packet_read(int fd, char* msg_type, unsigned char* buf, int buf_bytes);
 
 #endif

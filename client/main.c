@@ -18,6 +18,7 @@
 static network_t* network_ptr;
 static device_t* device_ptr;
 
+// Handle CTRL+C
 void
 interrupt()
 {
@@ -27,6 +28,7 @@ interrupt()
   }
 }
 
+// Called when we receive data from network
 void net_rx_callback(unsigned char* buf, int buf_bytes)
 {
   unsigned int header;
@@ -34,6 +36,8 @@ void net_rx_callback(unsigned char* buf, int buf_bytes)
   if (buf_bytes < 2) return;
   header = (buf[1] << 8) + buf[0];
 
+  // Write packet to device then sleep the appropriate amount to
+  // avoid overflowing DVAP's receive buffer
   dvap_pkt_write(device_ptr, buf, buf_bytes);
   sleep_ms(buf_bytes);
   return;
@@ -45,22 +49,20 @@ void net_rx_callback(unsigned char* buf, int buf_bytes)
     break;
   // GMSK header
   case 0xA02F:
-    //hex_dump("gmsk header", buf, buf_bytes);
     gmsk_parse_header(buf, buf_bytes);
     break;
   // GMSK data
   case 0xC012:
     if (buf_bytes < 4) return;
-    //hex_dump("gmsk data", buf, 4);
     gmsk_parse_data(buf, buf_bytes);
     break;
   default:
-    fprintf(stderr, "dvap_rx_callback: unrecognized data\n");
-    hex_dump("net rx", buf, buf_bytes);
+    hex_dump("net rx unrecognized", buf, buf_bytes);
     break;
   }
 }
 
+// Called when we receive data from DVAP device
 void dvap_rx_callback(unsigned char* buf, int buf_len)
 {
   unsigned int header;
@@ -74,19 +76,17 @@ void dvap_rx_callback(unsigned char* buf, int buf_len)
     break;
   // GMSK header
   case 0xA02F:
-    //hex_dump("gmsk header", buf, buf_len);
     gmsk_parse_header(buf, buf_len);
     net_write(network_ptr, buf, buf_len);
     break;
   // GMSK data
   case 0xC012:
     if (buf_len < 4) return;
-    //hex_dump("gmsk data", buf, 4);
     gmsk_parse_data(buf, buf_len);
     net_write(network_ptr, buf, buf_len);
     break;
   default:
-    fprintf(stderr, "dvap_rx_callback: unrecognized data\n");
+    hex_dump("dvap rx unrecognized", buf, buf_len);
     break;
   }
 }
@@ -108,12 +108,14 @@ main(int argc, char* argv[])
   device_ptr = &d_ctx;
   signal(SIGINT, interrupt);
 
+  // Initialized network
   if (!net_init(&n_ctx, argv[1], PORT, &net_rx_callback)) {
     fprintf(stderr, "Error connecting to %s on port %d\n", argv[1], PORT);
     return -1;
   }
   printf("Connected to %s on port %d\n", argv[1], PORT);
 
+  // Initialize DVAP
   if (!dvap_init(&d_ctx, &dvap_rx_callback)) {
     fprintf(stderr, "Error initializing DVAP device\n");
     return -1;

@@ -13,6 +13,9 @@ $(TARGET): common.c device.c device_gmsk.c main.c network.c queue.c serial.c
 qtest: qtest.c queue.c
 	$(CC) -Wall -o $@ $^
 
+dvap_debug: common.c device.c device_gmsk.c dvap_debug.c queue.c serial.c
+	$(CC) $(FLAGS) -Wall -o $@ $^ $(INCLUDES) $(LIBS)
+
 netsink: common.c device_gmsk.c netsink.c network.c
 	$(CC) $(FLAGS) -Wall -o $@ $^
 
@@ -28,4 +31,4 @@ parsedump: common.c parsedump.c
 .PHONY: clean
 
 clean:
-	rm -f *.o *~ $(TARGET) qtest nettest netsink netsrc parsedump
+	rm -f *.o *~ $(TARGET) qtest dvap_debug nettest netsink netsrc parsedump

@@ -1,3 +1,6 @@
+// main.go
+// DVAP bridge server
+
 package main
 
 import (
@@ -13,10 +16,6 @@ const (
 	CONN_HOST = "localhost"
 	CONN_PORT = "8001"
 	CONN_TYPE = "tcp"
-
-	DEBUG_HOST = "localhost"
-	DEBUG_PORT = "8002"
-	DEBUG_TYPE = "tcp"
 
 	CONN_MAX_SIZE = 8191
 )

@@ -1,34 +1,19 @@
 CC = gcc
 
-TARGET = client
+TARGETS = client qtest
 FLAGS = -pthread
 INCLUDES = -I/usr/local/include
 LIBS = -L/usr/local/lib
 
-all: $(TARGET)
+all: $(TARGETS)
 
-$(TARGET): common.c device.c device_gmsk.c main.c network.c queue.c serial.c
+client: common.c device.c device_gmsk.c main.c network.c queue.c serial.c
 	$(CC) $(FLAGS) -Wall -o $@ $^ $(INCLUDES) $(LIBS)
 
 qtest: qtest.c queue.c
-	$(CC) -Wall -o $@ $^
-
-dvap_debug: common.c device.c device_gmsk.c dvap_debug.c queue.c serial.c
-	$(CC) $(FLAGS) -Wall -o $@ $^ $(INCLUDES) $(LIBS)
-
-netsink: common.c device_gmsk.c netsink.c network.c
-	$(CC) $(FLAGS) -Wall -o $@ $^
-
-netsrc: common.c netsrc.c network.c
-	$(CC) $(FLAGS) -Wall -o $@ $^
-
-nettest: common.c nettest.c network.c
-	$(CC) $(FLAGS) -Wall -o $@ $^
-
-parsedump: common.c parsedump.c
-	$(CC) $(FLAGS) -Wall -o $@ $^
+	$(CC) -Wall -o $@ $^ $(INCLUDES) $(LIBS)
 
 .PHONY: clean
 
 clean:
-	rm -f *.o *~ $(TARGET) qtest dvap_debug nettest netsink netsrc parsedump
+	rm -f *.o *~ $(TARGETS)

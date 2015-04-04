@@ -1,3 +1,6 @@
+// netsink.c
+// This utility will dump data received from the server out to a file
+
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
@@ -27,7 +30,7 @@ void net_rx_callback(unsigned char* buf, int buf_bytes)
   unsigned int header;
   int write_bytes;
   int n;
-  //hex_dump("net rx", buf, buf_bytes);
+
   if (buf_bytes < 2) {
     fprintf(stderr, "uh oh...\n");
     return;
@@ -55,13 +58,11 @@ void net_rx_callback(unsigned char* buf, int buf_bytes)
     break;
   // GMSK header
   case 0xA02F:
-    //hex_dump("gmsk header", buf, buf_bytes);
     gmsk_parse_header(buf, buf_bytes);
     break;
   // GMSK data
   case 0xC012:
     if (buf_bytes < 4) return;
-    //hex_dump("gmsk data", buf, 4);
     gmsk_parse_data(buf, buf_bytes);
     break;
   default:

@@ -1,3 +1,7 @@
+// dvap_debug.c
+// This utility is used to dump data received from a DVAP device and
+// reply dumps back to the DVAP for transmission
+
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>

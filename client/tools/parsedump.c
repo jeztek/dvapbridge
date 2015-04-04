@@ -1,5 +1,7 @@
-#include <stdio.h>
+// parsedump.c
+// Parse data dump files
 
+#include <stdio.h>
 #include "common.h"
 
 int rx(FILE* fp)

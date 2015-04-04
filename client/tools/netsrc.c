@@ -1,3 +1,6 @@
+// netsrc.c
+// This utility send previously recorded data dumps back to the server
+
 #include <signal.h>
 #include <stdio.h>
 #include <unistd.h>

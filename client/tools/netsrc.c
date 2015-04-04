@@ -9,7 +9,7 @@
 #include "network.h"
 #include "common.h"
 
-#define PORT 8001
+#define PORT 8191
 
 int read_packet(FILE* fp, unsigned char* buf, int buf_len)
 {

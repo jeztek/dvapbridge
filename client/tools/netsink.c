@@ -11,7 +11,7 @@
 #include "device_gmsk.h"
 #include "network.h"
 
-#define PORT 8001
+#define PORT 8191
 
 static network_t* network_ptr;
 FILE* fp;

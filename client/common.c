@@ -2,6 +2,11 @@
 #include <unistd.h>
 #include "common.h"
 
+void sleep_ms(int milliseconds)
+{
+  usleep(milliseconds * 1000);
+}
+
 void
 hex_dump(char* prefix, unsigned char* buf, int buf_len)
 {

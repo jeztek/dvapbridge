@@ -102,6 +102,9 @@ typedef struct {
   pthread_mutex_t tx_mutex;       // acquire before writing to dvap
   pthread_t watchdog_thread;      // pthread associated with watchdog loop
 
+  pthread_mutex_t ptt_mutex;
+  int ptt_active;
+
   queue_t rxq;			  // queue to hold expected data from dvap
   pthread_t rx_thread;            // pthread associated with read loop
 
@@ -193,10 +196,9 @@ int dvap_read(device_t* ctx, char* msg_type, unsigned char* buf,
 
 int dvap_should_shutdown(device_t* ctx);
 void* dvap_watchdog_loop(void* arg);
-int dvap_tx_data(device_t* ctx, unsigned char* data, int data_len);
 
 void* dvap_read_loop(void* arg);
-void dvap_parse_rx_unsolicited(unsigned char* buf, int buf_len);
+void dvap_parse_rx_unsolicited(device_t* ctx, unsigned char* buf, int buf_len);
 
 void dvap_print_operational_status(unsigned char* buf, int buf_len);
 void dvap_print_ptt_state(unsigned char* buf, int buf_len);

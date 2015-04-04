@@ -3,6 +3,7 @@
 #include <sys/select.h>
 #include <string.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "common.h"
@@ -249,6 +250,8 @@ dvap_init(device_t* ctx, dvap_rx_fptr callback)
   pthread_mutex_init(&(ctx->shutdown_mutex), NULL);
 
   pthread_mutex_init(&(ctx->tx_mutex), NULL);
+  pthread_mutex_init(&(ctx->ptt_mutex), NULL);
+  ctx->ptt_active = FALSE;
 
   // receive queue
   queue_init(&(ctx->rxq));
@@ -278,9 +281,11 @@ dvap_wait(device_t* ctx)
 {
   if (!ctx) return;
   pthread_join(ctx->rx_thread, NULL);
+  pthread_join(ctx->watchdog_thread, NULL);
   close(ctx->fd);
 
   pthread_mutex_destroy(&(ctx->shutdown_mutex));
+  pthread_mutex_destroy(&(ctx->tx_mutex));
 }
 
 // Shutdown DVAP device and shut down threads
@@ -306,16 +311,20 @@ dvap_pkt_write(device_t* ctx, unsigned char* buf, int buf_bytes)
   int n;
   int sent_bytes = 0;
 
+  pthread_mutex_lock(&(ctx->tx_mutex));
   while (sent_bytes < buf_bytes) {
-    pthread_mutex_lock(&(ctx->tx_mutex));
     n = write(ctx->fd, &buf[sent_bytes], buf_bytes-sent_bytes);
-    pthread_mutex_unlock(&(ctx->tx_mutex));
+    if (DEBUG) {
+      printf("[%ld] dvap_pkt_write: %d bytes\n", time(NULL), buf_bytes);
+    }
     if (n <= 0) {
+      pthread_mutex_unlock(&(ctx->tx_mutex));
       fprintf(stderr, "dvap_pkt_write - error writing to device\n");
       return -1;
     }
     sent_bytes += n;
   }
+  pthread_mutex_unlock(&(ctx->tx_mutex));
   return sent_bytes;
 }
 
@@ -347,11 +356,11 @@ dvap_write(device_t* ctx, char msg_type, int command, unsigned char* payload,
     hex_dump("tx", buf, 4);
   }
 
+  pthread_mutex_lock(&(ctx->tx_mutex));
   while(total_sent_bytes < 4) {
-    pthread_mutex_lock(&(ctx->tx_mutex));
     n = write(ctx->fd, &buf[total_sent_bytes], 4-total_sent_bytes);
-    pthread_mutex_unlock(&(ctx->tx_mutex));
     if (n <= 0) {
+      pthread_mutex_unlock(&(ctx->tx_mutex));
       debug_print("dvap_write - returned %d\n", n);
       return n;
     }
@@ -363,11 +372,10 @@ dvap_write(device_t* ctx, char msg_type, int command, unsigned char* payload,
       hex_dump("tx payload", payload, payload_bytes);
     }
     while(payload_sent_bytes < payload_bytes) {
-      pthread_mutex_lock(&(ctx->tx_mutex));
       n = write(ctx->fd, &payload[payload_sent_bytes],
                 payload_bytes-payload_sent_bytes);
-      pthread_mutex_unlock(&(ctx->tx_mutex));
       if (n <= 0) {
+        pthread_mutex_unlock(&(ctx->tx_mutex));
         debug_print("dvap_write - returned %d\n", n);
         return n;
       }
@@ -375,6 +383,7 @@ dvap_write(device_t* ctx, char msg_type, int command, unsigned char* payload,
       total_sent_bytes += n;
     }
   }
+  pthread_mutex_unlock(&(ctx->tx_mutex));
   return total_sent_bytes;
 }
 
@@ -402,42 +411,30 @@ dvap_watchdog_loop(void* arg)
 {
   device_t* ctx = (device_t *)arg;
   unsigned char buf[3];
+  int ptt_active;
 
   buf[0] = 0x03;
   buf[1] = 0x60;
   buf[2] = 0x00;
 
   while (!dvap_should_shutdown(ctx)) {
-    pthread_mutex_lock(&(ctx->tx_mutex));
-    if (DEBUG) {
-      //hex_dump("tx", buf, 3);
+    pthread_mutex_lock(&(ctx->ptt_mutex));
+    ptt_active = ctx->ptt_active;
+    pthread_mutex_unlock(&(ctx->ptt_mutex));
+
+    if (!ptt_active) {
+      pthread_mutex_lock(&(ctx->tx_mutex));
+      write(ctx->fd, buf, 3);
+      pthread_mutex_unlock(&(ctx->tx_mutex));
+      if (DEBUG) {
+        printf("[%ld]", time(NULL));
+        hex_dump("watchdog tx", buf, 3);
+      }
     }
-    write(ctx->fd, buf, 3);
-    pthread_mutex_unlock(&(ctx->tx_mutex));
     sleep(3);
   }
 
   return NULL;
-}
-
-int
-dvap_tx_data(device_t* ctx, unsigned char* data, int data_len)
-{
-  int n;
-  int sent_bytes = 0;
-
-  while (sent_bytes < data_len) {
-    pthread_mutex_lock(&(ctx->tx_mutex));
-    n = write(ctx->fd, &data[sent_bytes], data_len-sent_bytes);
-    pthread_mutex_unlock(&(ctx->tx_mutex));
-    if (n <= 0) {
-      debug_print("tx_data - returned %d\n", n);
-      return n;
-    }
-    sent_bytes += n;
-  }
-
-  return sent_bytes;
 }
 
 void* 
@@ -486,7 +483,7 @@ dvap_read_loop(void* arg)
       }
       break;
     case DVAP_MSG_TARGET_UNSOLICITED:
-      dvap_parse_rx_unsolicited(&buf[2], ret-2);
+      dvap_parse_rx_unsolicited(ctx, &buf[2], ret-2);
       break;
     case DVAP_MSG_TARGET_DATA_ACK:
       break;
@@ -506,7 +503,7 @@ dvap_read_loop(void* arg)
 }
 
 void
-dvap_parse_rx_unsolicited(unsigned char* buf, int buf_len)
+dvap_parse_rx_unsolicited(device_t* ctx, unsigned char* buf, int buf_len)
 {
   int ctrl_code = (buf[1] << 8) + buf[0];
   if (ctrl_code != DVAP_CTRL_OPERATIONAL_STATUS) {
@@ -518,6 +515,16 @@ dvap_parse_rx_unsolicited(unsigned char* buf, int buf_len)
     break;
   case DVAP_CTRL_PTT_STATE:
     dvap_print_ptt_state(buf, buf_len);
+    pthread_mutex_lock(&(ctx->ptt_mutex));
+    if (buf_len >= 3) {
+      if (buf[2] <= 0) {
+        ctx->ptt_active = FALSE;
+      }
+      else {
+        ctx->ptt_active = TRUE;
+      }
+    }
+    pthread_mutex_unlock(&(ctx->ptt_mutex));
     break;
   case DVAP_CTRL_DTMF_MSG:
     dvap_print_dtmf(buf, buf_len);

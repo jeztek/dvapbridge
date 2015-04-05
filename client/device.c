@@ -231,7 +231,7 @@ set_tx_power(device_t* ctx, int dbm)
 }
 
 int
-dvap_init(device_t* ctx, dvap_rx_fptr callback)
+dvap_init(device_t* ctx, char* portname, dvap_rx_fptr callback)
 {
   int fd;
   if (!ctx) return FALSE;
@@ -239,7 +239,7 @@ dvap_init(device_t* ctx, dvap_rx_fptr callback)
   ctx->callback = callback;
 
   // serial port
-  fd = serial_open(DVAP_SERIAL_PORT, DVAP_BAUD);
+  fd = serial_open(portname, DVAP_BAUD);
   if (fd < 0) {
     return FALSE;
   }

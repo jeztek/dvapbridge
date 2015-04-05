@@ -98,8 +98,8 @@ main(int argc, char* argv[])
   network_t n_ctx;
   device_t d_ctx;
 
-  if (argc < 2) {
-    fprintf(stderr, "Usage: %s <server>\n", argv[0]);
+  if (argc < 3) {
+    fprintf(stderr, "Usage: %s <server> <device>\n", argv[0]);
     return -1;
   }
 
@@ -116,8 +116,8 @@ main(int argc, char* argv[])
   printf("Connected to %s on port %d\n", argv[1], PORT);
 
   // Initialize DVAP
-  if (!dvap_init(&d_ctx, &dvap_rx_callback)) {
-    fprintf(stderr, "Error initializing DVAP device\n");
+  if (!dvap_init(&d_ctx, argv[2], &dvap_rx_callback)) {
+    fprintf(stderr, "No DVAP device found at %s\n", argv[2]);
     return -1;
   }
 

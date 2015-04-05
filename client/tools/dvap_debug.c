@@ -78,7 +78,7 @@ void dvap_rx_callback(unsigned char* buf, int buf_len)
 void
 print_usage(char* cmd)
 {
-  fprintf(stderr, "Usage: %s <option> <data file>\n", cmd);
+  fprintf(stderr, "Usage: %s <device> <option> <data file>\n", cmd);
   fprintf(stderr, "  -r receive from dvap and write to file\n");
   fprintf(stderr, "  -w read from file and write to dvap\n");
 }
@@ -92,23 +92,23 @@ main(int argc, char* argv[])
   int n;
   device_t device_ctx;
  
-  if (argc < 3) {
+  if (argc < 4) {
     print_usage(argv[0]);
     return -1;
   }
 
-  if (!strncmp("-r", argv[1], 2)) {
-    fp = fopen(argv[2], "wb");
+  if (!strncmp("-r", argv[2], 2)) {
+    fp = fopen(argv[3], "wb");
     if (!fp) {
-      fprintf(stderr, "Error opening file %s\n", argv[2]);
+      fprintf(stderr, "Error opening file %s\n", argv[3]);
       return -1;
     }
     write_mode = FALSE;
   }
-  else if (!strncmp("-w", argv[1], 2)) {
-    fp = fopen(argv[2], "rb");
+  else if (!strncmp("-w", argv[2], 2)) {
+    fp = fopen(argv[3], "rb");
     if (!fp) {
-      fprintf(stderr, "Error opening file %s\n", argv[2]);
+      fprintf(stderr, "Error opening file %s\n", argv[3]);
       return -1;
     }
     write_mode = TRUE;
@@ -121,7 +121,7 @@ main(int argc, char* argv[])
   device_ptr = &device_ctx;
   signal(SIGINT, interrupt);
 
-  if (!dvap_init(&device_ctx, &dvap_rx_callback)) {
+  if (!dvap_init(&device_ctx, argv[1], &dvap_rx_callback)) {
     fprintf(stderr, "Error initializing DVAP device\n");
     return -1;
   }
@@ -160,6 +160,8 @@ main(int argc, char* argv[])
       }
     }
     printf("Done!\n");
+    sleep(2);
+    dvap_stop(&device_ctx);
   }
 
   // Block until dvap_stop() is called

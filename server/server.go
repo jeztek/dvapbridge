@@ -10,9 +10,9 @@ import (
 
 // Server parameters
 const (
-	CONN_HOST = "localhost"
-	CONN_PORT = "8191"
-	CONN_TYPE = "tcp"
+	CONN_HOST     = "localhost"
+	CONN_PORT     = "8191"
+	CONN_TYPE     = "tcp"
 	CONN_MAX_SIZE = 8191
 )
 
@@ -96,7 +96,7 @@ func (server *Server) Listen() {
 				if msg.msgtype == MsgDisconnect {
 					server.Disconnect(msg)
 				} else if msg.msgtype == MsgData {
-					if (server.log != nil) {
+					if server.log != nil {
 						server.log.Write(msg.data)
 						server.log.Flush()
 					}

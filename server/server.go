@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"time"
 )
 
 // Server parameters
@@ -50,13 +51,13 @@ func (server *Server) SetLogfile(logfile string) {
 }
 
 func (server *Server) PrintClients() {
-	fmt.Println("Clients:")
+	fmt.Printf("[%d] Clients:\n", time.Now().Unix())
 	if len(server.clients) > 0 {
 		for k := range server.clients {
-			fmt.Printf("  %s\n", k)
+			fmt.Printf("    %s\n", k)
 		}
 	} else {
-		fmt.Println("  None")
+		fmt.Println("    None")
 	}
 }
 
@@ -73,6 +74,7 @@ func (server *Server) Broadcast(msg Message) {
 func (server *Server) Join(connection net.Conn) {
 	client := NewClient(connection)
 	server.clients[client.id] = client
+	fmt.Printf("[%d] %s connected\n", time.Now().Unix(), client.id)
 	server.PrintClients()
 	go func() {
 		for {
@@ -154,7 +156,7 @@ func (client *Client) Read() {
 	for {
 		n, err := client.reader.Read(data)
 		if err == io.EOF {
-			fmt.Printf("Client disconnected\n")
+			fmt.Printf("[%d] %s disconnected\n", time.Now().Unix(), client.id)
 			break
 		} else if err != nil {
 			fmt.Printf("Error reading from client, disconnecting...\n")

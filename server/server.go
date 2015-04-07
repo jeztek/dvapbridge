@@ -11,7 +11,7 @@ import (
 
 // Server parameters
 const (
-	CONN_HOST     = "localhost"
+	CONN_HOST     = ""
 	CONN_PORT     = "8191"
 	CONN_TYPE     = "tcp"
 	CONN_MAX_SIZE = 8191

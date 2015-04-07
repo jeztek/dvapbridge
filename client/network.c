@@ -144,6 +144,8 @@ net_read_loop(void* arg)
   while(!net_should_shutdown(ctx)) {
     FD_ZERO(&set);
     FD_SET(ctx->fd, &set);
+    // Linux version of select overwrites timeout, so we set it on each
+    // iteration of the while loop
     timeout.tv_sec = 0;
     timeout.tv_usec = NET_READ_TIMEOUT_USEC;
     ret = select(ctx->fd + 1, &set, NULL, NULL, &timeout);

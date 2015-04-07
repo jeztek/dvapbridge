@@ -47,7 +47,6 @@ func (server *Server) SetLogfile(logfile string) {
 		return
 	}
 	server.log = bufio.NewWriter(f)
-	defer f.Close()
 }
 
 func (server *Server) PrintClients() {

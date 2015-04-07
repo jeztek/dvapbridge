@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 // Set to 0 to disable, 1 to enable
-#define DEBUG 1
+#define DEBUG 0
 
 // http://stackoverflow.com/questions/1644868/c-define-macro-for-debug-printing
 #define debug_print(fmt, ...) \

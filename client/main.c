@@ -54,7 +54,7 @@ void net_rx_callback(unsigned char* buf, int buf_bytes)
   // GMSK data
   case 0xC012:
     if (buf_bytes < 4) return;
-    gmsk_parse_data(buf, buf_bytes);
+    //gmsk_parse_data(buf, buf_bytes);
     break;
   default:
     hex_dump("net rx unrecognized", buf, buf_bytes);

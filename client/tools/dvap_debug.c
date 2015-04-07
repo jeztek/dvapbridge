@@ -87,7 +87,6 @@ int
 main(int argc, char* argv[])
 {
   char buf[20];
-  unsigned char wbuf[3];
   unsigned char dbuf[8191];
   int n;
   device_t device_ctx;
@@ -145,10 +144,6 @@ main(int argc, char* argv[])
 
   if (write_mode) {
     printf("Sending file data to DVAP\n");
-
-    wbuf[0] = 0x03;
-    wbuf[1] = 0x60;
-    wbuf[2] = 0x00;
 
     while(!fread_stop) {
       n = read_packet(fp, dbuf, 8191);

@@ -141,12 +141,11 @@ net_read_loop(void* arg)
   unsigned char buf[NET_MAX_BYTES];
 
   struct timeval timeout;
-  timeout.tv_sec = 0;
-  timeout.tv_usec = NET_READ_TIMEOUT_USEC;
-
   while(!net_should_shutdown(ctx)) {
     FD_ZERO(&set);
     FD_SET(ctx->fd, &set);
+    timeout.tv_sec = 0;
+    timeout.tv_usec = NET_READ_TIMEOUT_USEC;
     ret = select(ctx->fd + 1, &set, NULL, NULL, &timeout);
     if (ret < 0) {
       fprintf(stderr, "Error waiting for data from network\n");

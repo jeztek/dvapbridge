@@ -446,14 +446,13 @@ dvap_read_loop(void* arg)
   unsigned char buf[DVAP_MSG_MAX_BYTES];
 
   struct timeval timeout;
-  timeout.tv_sec = 0;
-  timeout.tv_usec = DVAP_READ_TIMEOUT_USEC;
-
   while(!dvap_should_shutdown(ctx)) {
     // Check if data is available for reading
     // Timeout and try again if nothing is available
     FD_ZERO(&set);
     FD_SET(ctx->fd, &set);
+    timeout.tv_sec = 0;
+    timeout.tv_usec = DVAP_READ_TIMEOUT_USEC;
     ret = select(ctx->fd+1, &set, NULL, NULL, &timeout);
     if (ret < 0) {
       fprintf(stderr, "Error waiting for data from DVAP\n");

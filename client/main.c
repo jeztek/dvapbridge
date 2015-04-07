@@ -82,7 +82,7 @@ void dvap_rx_callback(unsigned char* buf, int buf_len)
   // GMSK data
   case 0xC012:
     if (buf_len < 4) return;
-    gmsk_parse_data(buf, buf_len);
+    //gmsk_parse_data(buf, buf_len);
     net_write(network_ptr, buf, buf_len);
     break;
   default:

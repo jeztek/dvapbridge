@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -53,10 +55,40 @@ func (server *Server) PrintClients() {
 	fmt.Printf("[%d] Clients:\n", time.Now().Unix())
 	if len(server.clients) > 0 {
 		for k := range server.clients {
-			fmt.Printf("    %s\n", k)
+			callsign := server.clients[k].callsign
+			if callsign != "" {
+				fmt.Printf("    %s [%s]\n", k, callsign)
+			} else {
+				fmt.Printf("    %s\n", k)
+			}
 		}
 	} else {
 		fmt.Println("    None")
+	}
+}
+
+func (server *Server) parsePacket(msg Message) {
+	if *debug {
+		datastr := hex.Dump(msg.data)
+		fmt.Printf("[%d]\n%s\n", time.Now().Unix(), datastr)
+	}
+	if len(msg.data) < 2 {
+		return
+	}
+
+	header := binary.LittleEndian.Uint16(msg.data[0:2])
+	switch header {
+	case 0xA02F: // GMSK header
+		_, mycall := gmskParseHeader(msg)
+		if server.clients[msg.sender] != nil {
+			server.clients[msg.sender].callsign = mycall
+		}
+		server.Broadcast(msg)
+	case 0xC012: // GMSK data
+		//gmskParseData(msg)
+		server.Broadcast(msg)
+	default:
+		// Everything else
 	}
 }
 
@@ -97,11 +129,11 @@ func (server *Server) Listen() {
 				if msg.msgtype == MsgDisconnect {
 					server.Disconnect(msg)
 				} else if msg.msgtype == MsgData {
+					server.parsePacket(msg)
 					if server.log != nil {
 						server.log.Write(msg.data)
 						server.log.Flush()
 					}
-					server.Broadcast(msg)
 				}
 			case conn := <-server.joins:
 				server.Join(conn)
@@ -111,7 +143,7 @@ func (server *Server) Listen() {
 }
 
 func (server *Server) Start() {
-	fd, err := net.Listen(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
+	fd, err := net.Listen(CONN_TYPE, CONN_HOST + ":" + CONN_PORT)
 	if err != nil {
 		fmt.Printf("Error listening on %s:%s: %s\n", CONN_HOST, CONN_PORT,
 			err.Error())
@@ -143,6 +175,7 @@ func NewServer() *Server {
 
 type Client struct {
 	id         string
+	callsign   string
 	connection *net.Conn
 	incoming   chan Message
 	outgoing   chan Message

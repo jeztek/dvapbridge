@@ -103,7 +103,7 @@ typedef struct {
   pthread_mutex_t tx_mutex;       // acquire before writing to dvap
   pthread_t watchdog_thread;      // pthread associated with watchdog loop
 
-  pthread_mutex_t ptt_mutex;      // acquire before using ptt_activ
+  pthread_mutex_t ptt_mutex;      // acquire before using ptt_active
   int ptt_active;                 // true when dvap is transmitting
 
   queue_t rxq;			  // queue to hold expected data from dvap

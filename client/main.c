@@ -12,8 +12,7 @@
 
 /* TODO:
  * Make dvap device single duplex via mutex lock?
- *   What happens when audio arrives over network while transmitting?
- * Server should properly route streams destined for a specific user
+ * What happens when audio arrives over network while transmitting?
  */
 
 static network_t* network_ptr;

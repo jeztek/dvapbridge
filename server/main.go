@@ -1,6 +1,10 @@
 // main.go
 // DVAP bridge server
 
+/* TODO:
+ * Enable server restarts without dropping connections
+ * Server should properly route streams destined for a specific user
+ */
 package main
 
 import (

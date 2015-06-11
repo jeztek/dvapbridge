@@ -6,6 +6,7 @@
 #include "queue.h"
 
 #define DVAP_BAUD                    B230400
+#define DVAP_WATCHDOG_SECS           3
 #define DVAP_READ_TIMEOUT_USEC       10000
 
 #define DVAP_MSG_HOST_SET_CTRL       0x00

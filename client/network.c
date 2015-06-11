@@ -143,18 +143,23 @@ net_keepalive_loop(void* arg)
 {
   network_t* ctx = (network_t *)arg;
   unsigned char buf[2];
+  int counter = NET_KEEPALIVE_SECS;
 
   buf[0] = 0xEF;
   buf[1] = 0xBE;
 
   while(!net_should_shutdown(ctx)) {
-    pthread_mutex_lock(&(ctx->tx_mutex));
-    send(ctx->fd, buf, 2, 0);
-    pthread_mutex_unlock(&(ctx->tx_mutex));
-    if (DEBUG) {
-      hex_dump("net keepalive tx", buf, 2);
+    if (counter <= 0) {
+      pthread_mutex_lock(&(ctx->tx_mutex));
+      send(ctx->fd, buf, 2, 0);
+      pthread_mutex_unlock(&(ctx->tx_mutex));
+      counter = NET_KEEPALIVE_SECS;
+      if (DEBUG) {
+        hex_dump("net keepalive tx", buf, 2);
+      }
     }
-    sleep(NET_KEEPALIVE_SECS);
+    counter -= 1;
+    sleep(1);
   }
 
   return NULL;

@@ -410,26 +410,30 @@ dvap_watchdog_loop(void* arg)
   device_t* ctx = (device_t *)arg;
   unsigned char buf[3];
   int ptt_active;
-
+  int counter = DVAP_WATCHDOG_SECS;
   buf[0] = 0x03;
   buf[1] = 0x60;
   buf[2] = 0x00;
 
   while (!dvap_should_shutdown(ctx)) {
-    pthread_mutex_lock(&(ctx->ptt_mutex));
-    ptt_active = ctx->ptt_active;
-    pthread_mutex_unlock(&(ctx->ptt_mutex));
+    if (counter <= 0) {
+      pthread_mutex_lock(&(ctx->ptt_mutex));
+      ptt_active = ctx->ptt_active;
+      pthread_mutex_unlock(&(ctx->ptt_mutex));
 
-    // Only send watchdog keepalive message if transmitter is not in use
-    if (!ptt_active) {
-      pthread_mutex_lock(&(ctx->tx_mutex));
-      write(ctx->fd, buf, 3);
-      pthread_mutex_unlock(&(ctx->tx_mutex));
-      if (DEBUG) {
-        hex_dump("watchdog tx", buf, 3);
+      // Only send watchdog keepalive message if transmitter is not in use
+      if (!ptt_active) {
+        pthread_mutex_lock(&(ctx->tx_mutex));
+        write(ctx->fd, buf, 3);
+        pthread_mutex_unlock(&(ctx->tx_mutex));
+        counter = DVAP_WATCHDOG_SECS;
+        if (DEBUG) {
+          hex_dump("watchdog tx", buf, 3);
+        }
       }
     }
-    sleep(3);
+    counter -= 1;
+    sleep(1);
   }
 
   return NULL;

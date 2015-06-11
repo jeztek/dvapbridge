@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"time"
 )
 
 func gmskParseHeader(msg Message) (urcall string, mycall string) {
@@ -23,9 +24,10 @@ func gmskParseHeader(msg Message) (urcall string, mycall string) {
 	urcall = string(packet[25:33])
 	mycall = string(packet[33:41])
 
-	fmt.Printf("HEADER: client: %s, streamId: %d, framePos: %d, seq: %d\n",
+	fmt.Printf("[%d] HEADER:\n", time.Now().Unix())
+	fmt.Printf("    client: %s, streamId: %d, framePos: %d, seq: %d\n",
 		msg.sender, streamId, framePos, seq)
-	fmt.Printf("        rpt1: [%s], rpt2: [%s], urcall: [%s], mycall: [%s]\n",
+	fmt.Printf("    rpt1: [%s], rpt2: [%s], urcall: [%s], mycall: [%s]\n",
 		rpt1, rpt2, urcall, mycall)
 
 	return urcall, mycall
@@ -41,6 +43,6 @@ func gmskParseData(msg Message) {
 	framePos := packet[4] >> 3
 	seq := packet[5]
 
-	fmt.Printf("DATA: client: %s, streamId: %d, framePos: %d, seq: %d\n",
-		msg.sender, streamId, framePos, seq)
+	fmt.Printf("[%d] DATA: client: %s, streamId: %d, framePos: %d, seq: %d\n",
+		time.Now().Unix(), msg.sender, streamId, framePos, seq)
 }

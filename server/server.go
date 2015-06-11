@@ -34,11 +34,12 @@ type Message struct {
 }
 
 type Server struct {
-	clients  map[string]*Client
-	joins    chan net.Conn
-	incoming chan Message
-	outgoing chan Message
-	log      *bufio.Writer
+	clients   map[string]*Client
+	callsigns map[string]string
+	joins     chan net.Conn
+	incoming  chan Message
+	outgoing  chan Message
+	log       *bufio.Writer
 }
 
 func (server *Server) SetLogfile(logfile string) {
@@ -79,9 +80,13 @@ func (server *Server) parsePacket(msg Message) {
 	header := binary.LittleEndian.Uint16(msg.data[0:2])
 	switch header {
 	case 0xA02F: // GMSK header
-		_, mycall := gmskParseHeader(msg)
+		urcall, mycall := gmskParseHeader(msg)
 		if server.clients[msg.sender] != nil {
 			server.clients[msg.sender].callsign = mycall
+		}
+		if urcall != "CQCQCQ  " {
+			fmt.Printf("[%d] Non-CQ packet: [%s] => [%s]\n",
+				time.Now().Unix(), mycall, urcall)
 		}
 		server.Broadcast(msg)
 	case 0xC012: // GMSK data
@@ -115,10 +120,15 @@ func (server *Server) Join(connection net.Conn) {
 }
 
 func (server *Server) Disconnect(msg Message) {
-	if msg.msgtype == MsgDisconnect {
-		delete(server.clients, msg.sender)
-		server.PrintClients()
+	client := server.clients[msg.sender]
+	if client == nil || msg.msgtype != MsgDisconnect {
+		return
 	}
+	if client.callsign != "" {
+		delete(server.callsigns, client.callsign)
+	}
+	delete(server.clients, msg.sender)
+	server.PrintClients()
 }
 
 func (server *Server) Listen() {

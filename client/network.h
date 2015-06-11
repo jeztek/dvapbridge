@@ -21,7 +21,8 @@ typedef struct {
 
   int fd;
 
-  int shutdown;
+  int try_restart;	// if true, restart network connection on timeout
+  int shutdown;         // if true, stop net_read_loop
   pthread_mutex_t shutdown_mutex;
 
   pthread_t rx_thread;

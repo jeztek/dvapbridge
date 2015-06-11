@@ -8,6 +8,7 @@
 #include "network.h"
 
 #define PORT 8191
+#define USE_DVAP 1
 
 /* TODO:
  * Make dvap device single duplex via mutex lock?
@@ -23,9 +24,11 @@ void
 interrupt()
 {
   net_stop(network_ptr);
+#if USE_DVAP
   if (!dvap_stop(device_ptr)) {
     fprintf(stderr, "Error stopping DVAP device\n");
   }
+#endif
 }
 
 // Called when we receive data from network
@@ -91,37 +94,26 @@ void dvap_rx_callback(unsigned char* buf, int buf_len)
   }
 }
 
-int 
-main(int argc, char* argv[])
+int
+retry_wrapper(int argc, char* argv[])
 {
   char buf[20];
-  network_t n_ctx;
-  device_t d_ctx;
 
-  if (argc < 3) {
-    fprintf(stderr, "Usage: %s <server> <device>\n", argv[0]);
-    return -1;
-  }
-
-  // Configure CTRL+C handler
-  network_ptr = &n_ctx;
-  device_ptr = &d_ctx;
-  signal(SIGINT, interrupt);
-
-  // Initialized network
-  if (!net_init(&n_ctx, argv[1], PORT, &net_rx_callback)) {
+  // Initialize network
+  if (!net_init(network_ptr, argv[1], PORT, &net_rx_callback)) {
     fprintf(stderr, "Error connecting to %s on port %d\n", argv[1], PORT);
     return -1;
   }
   printf("Connected to %s on port %d\n", argv[1], PORT);
 
+#if USE_DVAP
   // Initialize DVAP
-  if (!dvap_init(&d_ctx, argv[2], &dvap_rx_callback)) {
+  if (!dvap_init(device_ptr, argv[2], &dvap_rx_callback)) {
     fprintf(stderr, "No DVAP device found at %s\n", argv[2]);
     return -1;
   }
 
-  if (get_name(&d_ctx, buf, 20)) {
+  if (get_name(device_ptr, buf, 20)) {
     printf("Device name: %s\n", buf);
   }
 
@@ -143,24 +135,63 @@ main(int argc, char* argv[])
     [set run state]   tx: 05 00 18 00 00   rx: 05 00 18 00 00
    */
 
-  //set_operation_mode(&d_ctx, DVAP_OPERATION_NORMAL);
-  //set_squelch_threshold(&d_ctx, -80);
-  //set_tx_power(&d_ctx, -12);
+  //set_operation_mode(device_ptr, DVAP_OPERATION_NORMAL);
+  //set_squelch_threshold(device_ptr, -80);
+  //set_tx_power(device_ptr, -12);
   printf("cmd - set rx frequency\n");
-  set_rx_frequency(&d_ctx, 145670000);
+  set_rx_frequency(device_ptr, 145670000);
   printf("cmd - set tx frequency\n");
-  set_tx_frequency(&d_ctx, 145670000);
+  set_tx_frequency(device_ptr, 145670000);
   printf("cmd - set modulation type\n");
-  set_modulation_type(&d_ctx, DVAP_MODULATION_GMSK);
+  set_modulation_type(device_ptr, DVAP_MODULATION_GMSK);
 
   printf("cmd - dvap start\n");
-  if (!dvap_start(&d_ctx)) {
+  if (!dvap_start(device_ptr)) {
     fprintf(stderr, "Error starting DVAP device\n");
     return -1;
   }
+#endif
 
-  // Block until net_stop() and dvap_stop() are called
-  net_wait(&n_ctx);
-  dvap_wait(&d_ctx);
+  // Block until net_read_loop finishes
+  net_wait(network_ptr);
+
+  // If net_read_loop finished due to a network timeout,
+  // signal stop of dvap so we can restart
+  if (network_ptr->try_restart) {
+    printf("Reconnecting to network\n");
+#if USE_DVAP
+    dvap_stop(device_ptr);
+#endif
+    sleep(2);
+  }
+
+  // Block until dvap_read_loop finishes
+  dvap_wait(device_ptr);
+
+  return 0;
+}
+
+int
+main(int argc, char* argv[])
+{
+  network_t n_ctx;
+  device_t d_ctx;
+  int ret;
+
+  if (argc < 3) {
+    fprintf(stderr, "Usage: %s <server> <device>\n", argv[0]);
+    return -1;
+  }
+
+  // Configure CTRL+C handler
+  network_ptr = &n_ctx;
+  device_ptr = &d_ctx;
+  signal(SIGINT, interrupt);
+
+  do {
+    ret = retry_wrapper(argc, argv);
+  } while(n_ctx.try_restart);
+  if (ret) return ret;
+
   return 0;
 }

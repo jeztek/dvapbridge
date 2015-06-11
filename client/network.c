@@ -22,6 +22,7 @@ net_init(network_t* ctx, char* hostname, int port, net_rx_fptr callback)
   ctx->host[HOST_NAME_MAX] = 0;
   ctx->port = port;
 
+  ctx->try_restart = FALSE;
   ctx->shutdown = FALSE;
   pthread_mutex_init(&(ctx->shutdown_mutex), NULL);
 
@@ -160,10 +161,12 @@ net_read_loop(void* arg)
 
     ret = net_read(ctx, &msg_type, buf, NET_MAX_BYTES);
     if (ret < 0) {
+      ctx->try_restart = TRUE;
       fprintf(stderr, "Error reading from network\n");
       return NULL;
     }
     else if (ret == 0) {
+      ctx->try_restart = TRUE;
       fprintf(stderr, "Timeout while reading from network\n");
       return NULL;
     }

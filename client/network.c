@@ -25,11 +25,13 @@ net_init(network_t* ctx, char* hostname, int port, net_rx_fptr callback)
   ctx->try_restart = FALSE;
   ctx->shutdown = FALSE;
   pthread_mutex_init(&(ctx->shutdown_mutex), NULL);
+  pthread_mutex_init(&(ctx->tx_mutex), NULL);
 
   if (!net_connect(ctx)) {
     return FALSE;
   }
 
+  pthread_create(&(ctx->keepalive_thread), NULL, net_keepalive_loop, ctx);
   if (ctx->callback) {
     pthread_create(&(ctx->rx_thread), NULL, net_read_loop, ctx);
   }
@@ -82,9 +84,11 @@ net_wait(network_t* ctx)
 {
   if (!ctx) return;
   pthread_join(ctx->rx_thread, NULL);
+  pthread_join(ctx->keepalive_thread, NULL);
   close(ctx->fd);
 
   pthread_mutex_destroy(&(ctx->shutdown_mutex));
+  pthread_mutex_destroy(&(ctx->tx_mutex));
 }
 
 int
@@ -93,14 +97,17 @@ net_write(network_t* ctx, unsigned char* buf, int buf_bytes)
   int n;
   int sent_bytes = 0;
 
+  pthread_mutex_lock(&(ctx->tx_mutex));
   while (sent_bytes < buf_bytes) {
     n = send(ctx->fd, &buf[sent_bytes], buf_bytes-sent_bytes, 0);
     if (n <= 0) {
+      pthread_mutex_unlock(&(ctx->tx_mutex));
       fprintf(stderr, "net_write - error writing to socket\n");
       return -1;
     }
     sent_bytes += n;
   }
+  pthread_mutex_unlock(&(ctx->tx_mutex));
   return sent_bytes;
 }
 
@@ -129,6 +136,28 @@ net_should_shutdown(network_t* ctx)
   shutdown = ctx->shutdown;
   pthread_mutex_unlock(&(ctx->shutdown_mutex));
   return shutdown;
+}
+
+void*
+net_keepalive_loop(void* arg)
+{
+  network_t* ctx = (network_t *)arg;
+  unsigned char buf[2];
+
+  buf[0] = 0xEF;
+  buf[1] = 0xBE;
+
+  while(!net_should_shutdown(ctx)) {
+    pthread_mutex_lock(&(ctx->tx_mutex));
+    send(ctx->fd, buf, 2, 0);
+    pthread_mutex_unlock(&(ctx->tx_mutex));
+    if (DEBUG) {
+      hex_dump("net keepalive tx", buf, 2);
+    }
+    sleep(NET_KEEPALIVE_SECS);
+  }
+
+  return NULL;
 }
 
 void*

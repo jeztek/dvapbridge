@@ -8,6 +8,7 @@
 #define HOST_NAME_MAX 64
 #endif
 
+#define NET_KEEPALIVE_SECS    120
 #define NET_READ_TIMEOUT_USEC 10000
 #define NET_MAX_BYTES         8191 // should match device.h:DVAP_MSG_MAX_BYTES
 
@@ -27,7 +28,10 @@ typedef struct {
   int shutdown;         		// set true to shut down rx loop
   pthread_mutex_t shutdown_mutex;	// acquire before using shutdown
 
-  pthread_t rx_thread;
+  pthread_mutex_t tx_mutex;		// acquire before writing to network
+  pthread_t keepalive_thread;		// pthread associated with keepalive
+
+  pthread_t rx_thread;			// pthread associated with read loop
 } network_t;
 
 int net_init(network_t* ctx, char* hostname, int port, net_rx_fptr callback);
@@ -38,6 +42,7 @@ int net_write(network_t* ctx, unsigned char* buf, int buf_bytes);
 void net_stop(network_t* ctx);
 
 int net_should_shutdown(network_t* ctx);
+void* net_keepalive_loop(void* arg);
 void* net_read_loop(void* arg);
 
 #endif

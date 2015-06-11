@@ -11,19 +11,21 @@
 #define NET_READ_TIMEOUT_USEC 10000
 #define NET_MAX_BYTES         8191 // should match device.h:DVAP_MSG_MAX_BYTES
 
+// net_rx_fptr is a function pointer that takes two arguments,
+// a pointer to a buffer and the length of the buffer
 typedef void (*net_rx_fptr)(unsigned char* buf, int buf_bytes);
 
 typedef struct {  
-  net_rx_fptr callback;
+  net_rx_fptr callback; 		// pointer to rx callback
 
   char host[HOST_NAME_MAX + 1];
   int port;
 
   int fd;
 
-  int try_restart;	// if true, restart network connection on timeout
-  int shutdown;         // if true, stop net_read_loop
-  pthread_mutex_t shutdown_mutex;
+  int try_restart;			// if true restart network on timeout
+  int shutdown;         		// set true to shut down rx loop
+  pthread_mutex_t shutdown_mutex;	// acquire before using shutdown
 
   pthread_t rx_thread;
 } network_t;

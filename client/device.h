@@ -90,7 +90,7 @@
 #define DVAP_BAND_SCAN_FREQ_MAX      148000000
 
 // dvap_rx_fptr is a function pointer that takes two arguments,
-// a pointer to a buffer an the length of the buffer
+// a pointer to a buffer and the length of the buffer
 typedef void (*dvap_rx_fptr)(unsigned char*, int);
 
 typedef struct {

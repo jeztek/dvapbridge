@@ -8,7 +8,7 @@
 #include "network.h"
 
 #define PORT 8191
-#define USE_DVAP 0
+#define USE_DVAP 1
 
 /* TODO:
  * Make dvap device single duplex via mutex lock?
@@ -18,10 +18,14 @@
 static network_t* network_ptr;
 static device_t* device_ptr;
 
+// Try connecting to server until user cancels
+static int net_init_retry = TRUE;
+
 // Handle CTRL+C
 void
 interrupt()
 {
+  net_init_retry = FALSE;
   net_stop(network_ptr, FALSE);
 #if USE_DVAP
   if (!dvap_stop(device_ptr)) {
@@ -94,15 +98,23 @@ void dvap_rx_callback(unsigned char* buf, int buf_len)
 }
 
 int
-retry_wrapper(int argc, char* argv[])
+timeout_retry_wrapper(int argc, char* argv[])
 {
   char buf[20];
+  int net_init_success;
 
-  // Initialize network
-  if (!net_init(network_ptr, argv[1], PORT, &net_rx_callback)) {
-    fprintf(stderr, "Error connecting to %s on port %d\n", argv[1], PORT);
-    return -1;
+  // Attempt to initialize network, retry on failure until user cancels
+  do {
+    net_init_success = net_init(network_ptr, argv[1], PORT, &net_rx_callback);
+    if (!net_init_success) {
+      fprintf(stderr, "Error connecting to %s on port %d\n", argv[1], PORT);
+      sleep(2);
+    }
+    if (!net_init_retry) {
+      return -1;
+    }
   }
+  while(!net_init_success && net_init_retry);
   printf("Connected to %s on port %d\n", argv[1], PORT);
 
 #if USE_DVAP
@@ -157,7 +169,6 @@ retry_wrapper(int argc, char* argv[])
   // If net_read_loop finished due to a network timeout,
   // signal stop of dvap so we can restart
   if (network_ptr->try_restart) {
-    printf("Reconnecting to network\n");
 #if USE_DVAP
     dvap_stop(device_ptr);
 #endif
@@ -188,7 +199,7 @@ main(int argc, char* argv[])
   signal(SIGINT, interrupt);
 
   do {
-    ret = retry_wrapper(argc, argv);
+    ret = timeout_retry_wrapper(argc, argv);
   } while(n_ctx.try_restart);
   if (ret) return ret;
 

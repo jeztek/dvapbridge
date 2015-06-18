@@ -1,7 +1,7 @@
 CC = gcc
 
 TARGETS = client qtest
-FLAGS = -pthread
+FLAGS = -Wall -pthread
 INCLUDES = -I/usr/local/include
 LIBS = -L/usr/local/lib
 

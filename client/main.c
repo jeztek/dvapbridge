@@ -175,8 +175,10 @@ timeout_retry_wrapper(int argc, char* argv[])
     sleep(2);
   }
 
+#if USE_DVAP
   // Block until dvap_read_loop finishes
   dvap_wait(device_ptr);
+#endif
 
   return 0;
 }

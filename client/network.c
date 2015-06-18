@@ -119,8 +119,11 @@ net_read(network_t* ctx, char* msg_type, unsigned char* buf, int buf_bytes)
 }
 
 void
-net_stop(network_t* ctx)
+net_stop(network_t* ctx, int try_restart)
 {
+  if (try_restart) {
+    ctx->try_restart = TRUE;
+  }
   pthread_mutex_lock(&(ctx->shutdown_mutex));
   ctx->shutdown = TRUE;
   pthread_mutex_unlock(&(ctx->shutdown_mutex));
@@ -195,13 +198,13 @@ net_read_loop(void* arg)
 
     ret = net_read(ctx, &msg_type, buf, NET_MAX_BYTES);
     if (ret < 0) {
-      ctx->try_restart = TRUE;
       fprintf(stderr, "Error reading from network\n");
+      net_stop(ctx, TRUE);
       return NULL;
     }
     else if (ret == 0) {
-      ctx->try_restart = TRUE;
       fprintf(stderr, "Timeout while reading from network\n");
+      net_stop(ctx, TRUE);
       return NULL;
     }
 

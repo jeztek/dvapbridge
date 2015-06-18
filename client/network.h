@@ -39,7 +39,7 @@ int net_connect(network_t* ctx);
 void net_wait(network_t* ctx);
 int net_read(network_t* ctx, char* msg_type, unsigned char* buf, int buf_bytes);
 int net_write(network_t* ctx, unsigned char* buf, int buf_bytes);
-void net_stop(network_t* ctx);
+void net_stop(network_t* ctx, int try_restart);
 
 int net_should_shutdown(network_t* ctx);
 void* net_keepalive_loop(void* arg);

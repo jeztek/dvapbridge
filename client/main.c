@@ -8,7 +8,7 @@
 #include "network.h"
 
 #define PORT 8191
-#define USE_DVAP 1
+#define USE_DVAP 0
 
 /* TODO:
  * Make dvap device single duplex via mutex lock?
@@ -22,7 +22,7 @@ static device_t* device_ptr;
 void
 interrupt()
 {
-  net_stop(network_ptr);
+  net_stop(network_ptr, FALSE);
 #if USE_DVAP
   if (!dvap_stop(device_ptr)) {
     fprintf(stderr, "Error stopping DVAP device\n");

@@ -4,4 +4,8 @@
 client/client
 client/qtest
 client/nettest
+client/tools/dvap_debug
+client/tools/netsink
+client/tools/netsrc
+client/tools/parsedump
 server/server

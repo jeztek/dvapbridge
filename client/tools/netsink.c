@@ -19,7 +19,7 @@ FILE* fp;
 void
 interrupt()
 {
-  net_stop(network_ptr);
+  net_stop(network_ptr, FALSE);
   if (fp) {
     fclose(fp);
   }

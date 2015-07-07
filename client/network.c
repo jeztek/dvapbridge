@@ -31,7 +31,9 @@ net_init(network_t* ctx, char* hostname, int port, net_rx_fptr callback)
     return FALSE;
   }
 
+#ifdef NET_KEEPALIVE_ENABLED
   pthread_create(&(ctx->keepalive_thread), NULL, net_keepalive_loop, ctx);
+#endif
   if (ctx->callback) {
     pthread_create(&(ctx->rx_thread), NULL, net_read_loop, ctx);
   }
@@ -84,7 +86,9 @@ net_wait(network_t* ctx)
 {
   if (!ctx) return;
   pthread_join(ctx->rx_thread, NULL);
+#ifdef NET_KEEPALIVE_ENABLED
   pthread_join(ctx->keepalive_thread, NULL);
+#endif
   close(ctx->fd);
 
   pthread_mutex_destroy(&(ctx->shutdown_mutex));
@@ -145,20 +149,21 @@ void*
 net_keepalive_loop(void* arg)
 {
   network_t* ctx = (network_t *)arg;
-  unsigned char buf[2];
+  unsigned char buf[3];
   int counter = NET_KEEPALIVE_SECS;
 
-  buf[0] = 0xEF;
-  buf[1] = 0xBE;
+  buf[0] = 0x03;
+  buf[1] = 0x60;
+  buf[2] = 0x00;
 
   while(!net_should_shutdown(ctx)) {
     if (counter <= 0) {
       pthread_mutex_lock(&(ctx->tx_mutex));
-      send(ctx->fd, buf, 2, 0);
+      send(ctx->fd, buf, 3, 0);
       pthread_mutex_unlock(&(ctx->tx_mutex));
       counter = NET_KEEPALIVE_SECS;
       if (DEBUG) {
-        hex_dump("net keepalive tx", buf, 2);
+        hex_dump("net keepalive tx", buf, 3);
       }
     }
     counter -= 1;

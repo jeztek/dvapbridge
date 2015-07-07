@@ -8,7 +8,9 @@
 #define HOST_NAME_MAX 64
 #endif
 
+#define NET_KEEPALIVE_ENABLED
 #define NET_KEEPALIVE_SECS    120
+
 #define NET_READ_TIMEOUT_USEC 10000
 #define NET_MAX_BYTES         8191 // should match device.h:DVAP_MSG_MAX_BYTES
 

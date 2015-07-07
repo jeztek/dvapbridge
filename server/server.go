@@ -69,14 +69,6 @@ func (server *Server) PrintClients() {
 }
 
 func (server *Server) parsePacket(msg Message) {
-	if *debug {
-		datastr := hex.Dump(msg.data)
-		fmt.Printf("[%d]\n%s\n", time.Now().Unix(), datastr)
-	}
-	if len(msg.data) < 2 {
-		return
-	}
-
 	header := binary.LittleEndian.Uint16(msg.data[0:2])
 	switch header {
 	case 0xA02F: // GMSK header
@@ -94,6 +86,9 @@ func (server *Server) parsePacket(msg Message) {
 		server.Broadcast(msg)
 	default:
 		// Everything else
+		if *debug {
+			fmt.Printf("    <ignored>\n")
+		}
 	}
 }
 
@@ -103,6 +98,10 @@ func (server *Server) Broadcast(msg Message) {
 			client.outgoing <- msg
 		} else {
 			//fmt.Printf("rx from %s\n", client.id);
+		}
+		if server.log != nil {
+			server.log.Write(msg.data)
+			server.log.Flush()
 		}
 	}
 }
@@ -140,10 +139,6 @@ func (server *Server) Listen() {
 					server.Disconnect(msg)
 				} else if msg.msgtype == MsgData {
 					server.parsePacket(msg)
-					if server.log != nil {
-						server.log.Write(msg.data)
-						server.log.Flush()
-					}
 				}
 			case conn := <-server.joins:
 				server.Join(conn)
@@ -153,7 +148,7 @@ func (server *Server) Listen() {
 }
 
 func (server *Server) Start() {
-	fd, err := net.Listen(CONN_TYPE, CONN_HOST + ":" + CONN_PORT)
+	fd, err := net.Listen(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
 	if err != nil {
 		fmt.Printf("Error listening on %s:%s: %s\n", CONN_HOST, CONN_PORT,
 			err.Error())
@@ -193,18 +188,60 @@ type Client struct {
 	writer     *bufio.Writer
 }
 
+func (client *Client) ReadPacketError(err error) error {
+	if err == io.EOF {
+		return fmt.Errorf("[%d] %s disconnected\n", time.Now().Unix(), client.id)
+	}
+	return fmt.Errorf("Error reading from client, disconnecting...\n")
+}
+
+func (client *Client) ReadPacket() (data []byte, err error) {
+	data = make([]byte, CONN_MAX_SIZE)
+	expectedBytes := 0
+	receivedBytes := 0
+	n := 0
+
+	n, err = client.reader.Read(data[:2])
+	if err != nil {
+		return nil, client.ReadPacketError(err)
+	}
+	if n < 2 {
+		err = fmt.Errorf("Client unable to read packet header\n")
+		return nil, err
+	}
+
+	receivedBytes += n
+	expectedBytes = int(data[0] + ((data[1] & 0x1F) << 8))
+	if expectedBytes >= cap(data) {
+		err = fmt.Errorf("Client read expected %d bytes but only %d bytes available", expectedBytes, cap(data))
+		return nil, err
+	}
+
+	for receivedBytes < expectedBytes {
+		n, err = client.reader.Read(data[receivedBytes:expectedBytes])
+		if err != nil {
+			return nil, client.ReadPacketError(err)
+		}
+		receivedBytes += n
+	}
+
+	if *debug {
+		datastr := hex.Dump(data[:receivedBytes])
+		fmt.Printf("\n[%d] %d bytes\n%s", time.Now().Unix(), receivedBytes,
+			datastr)
+	}
+
+	return data[:receivedBytes], nil
+}
+
 func (client *Client) Read() {
-	data := make([]byte, CONN_MAX_SIZE)
 	for {
-		n, err := client.reader.Read(data)
-		if err == io.EOF {
-			fmt.Printf("[%d] %s disconnected\n", time.Now().Unix(), client.id)
-			break
-		} else if err != nil {
-			fmt.Printf("Error reading from client, disconnecting...\n")
+		data, err := client.ReadPacket()
+		if err != nil {
+			fmt.Print(err)
 			break
 		} else {
-			client.incoming <- Message{MsgData, client.id, data[:n]}
+			client.incoming <- Message{MsgData, client.id, data}
 		}
 	}
 

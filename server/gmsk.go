@@ -11,7 +11,7 @@ func gmskParseHeader(msg Message) (urcall string, mycall string) {
 	if len(packet) < 47 {
 		return "", ""
 	}
-	
+
 	streamId := binary.LittleEndian.Uint16(packet[2:4])
 	framePos := packet[4] >> 3
 	seq := packet[5]

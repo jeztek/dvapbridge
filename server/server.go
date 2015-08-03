@@ -43,28 +43,28 @@ type Server struct {
 }
 
 func (server *Server) SetLogfile(logfile string) {
-	fmt.Printf("Logging data to file \"%s\"\n", logfile)
+	Printf("Logging data to file \"%s\"\n", logfile)
 	f, err := os.Create(logfile)
 	if err != nil {
-		fmt.Printf("Error creating log file\n")
+		Printf("Error creating log file\n")
 		return
 	}
 	server.log = bufio.NewWriter(f)
 }
 
 func (server *Server) PrintClients() {
-	fmt.Printf("[%d] Clients:\n", time.Now().Unix())
+	Printf("Clients:\n")
 	if len(server.clients) > 0 {
 		for k := range server.clients {
 			callsign := server.clients[k].callsign
 			if callsign != "" {
-				fmt.Printf("    %s [%s]\n", k, callsign)
+				fmt.Printf("                          %s [%s]\n", k, callsign)
 			} else {
-				fmt.Printf("    %s\n", k)
+				fmt.Printf("                          %s\n", k)
 			}
 		}
 	} else {
-		fmt.Println("    None")
+		fmt.Println("                          None")
 	}
 }
 
@@ -77,8 +77,7 @@ func (server *Server) parsePacket(msg Message) {
 			server.clients[msg.sender].callsign = mycall
 		}
 		if urcall != "CQCQCQ  " {
-			fmt.Printf("[%d] Non-CQ packet: [%s] => [%s]\n",
-				time.Now().Unix(), mycall, urcall)
+			Printf("Non-CQ packet: [%s] => [%s]\n", mycall, urcall)
 		}
 		server.Broadcast(msg)
 	case 0xC012: // GMSK data
@@ -87,7 +86,7 @@ func (server *Server) parsePacket(msg Message) {
 	default:
 		// Everything else
 		if *debug {
-			fmt.Printf("    <ignored>\n")
+			Printf("    <ignored>\n")
 		}
 	}
 }
@@ -109,7 +108,7 @@ func (server *Server) Broadcast(msg Message) {
 func (server *Server) Join(connection net.Conn) {
 	client := NewClient(connection)
 	server.clients[client.id] = client
-	fmt.Printf("[%d] %s connected\n", time.Now().Unix(), client.id)
+	Printf("%s connected\n", client.id)
 	server.PrintClients()
 	go func() {
 		for {
@@ -150,17 +149,17 @@ func (server *Server) Listen() {
 func (server *Server) Start() {
 	fd, err := net.Listen(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
 	if err != nil {
-		fmt.Printf("Error listening on %s:%s: %s\n", CONN_HOST, CONN_PORT,
+		Printf("Error listening on %s:%s: %s\n", CONN_HOST, CONN_PORT,
 			err.Error())
 		return
 	}
 	defer fd.Close()
 
-	fmt.Println("Listening on " + CONN_HOST + ":" + CONN_PORT)
+	Printf("Listening on %s:%s\n", CONN_HOST, CONN_PORT)
 	for {
 		conn, err := fd.Accept()
 		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
+			Printf("Error accepting connection: %s", err.Error())
 			return
 		}
 		server.joins <- conn
@@ -190,7 +189,8 @@ type Client struct {
 
 func (client *Client) ReadPacketError(err error) error {
 	if err == io.EOF {
-		return fmt.Errorf("[%d] %s disconnected\n", time.Now().Unix(), client.id)
+		return fmt.Errorf("[%s] %s disconnected\n",
+			time.Now().Format(time.RFC822Z), client.id)
 	}
 	return fmt.Errorf("Error reading from client, disconnecting...\n")
 }
@@ -227,8 +227,7 @@ func (client *Client) ReadPacket() (data []byte, err error) {
 
 	if *debug {
 		datastr := hex.Dump(data[:receivedBytes])
-		fmt.Printf("\n[%d] %d bytes\n%s", time.Now().Unix(), receivedBytes,
-			datastr)
+		Printf("%d bytes\n%s", receivedBytes, datastr)
 	}
 
 	return data[:receivedBytes], nil
@@ -238,7 +237,7 @@ func (client *Client) Read() {
 	for {
 		data, err := client.ReadPacket()
 		if err != nil {
-			fmt.Print(err)
+			Printf("%s", err)
 			break
 		} else {
 			client.incoming <- Message{MsgData, client.id, data}
@@ -258,7 +257,7 @@ func (client *Client) Write() {
 		_, err := client.writer.Write(msg.data)
 		client.writer.Flush()
 		if err != nil {
-			fmt.Printf("Error writing to client\n")
+			Printf("Error writing to client\n")
 			continue
 		}
 	}

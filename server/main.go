@@ -8,8 +8,10 @@
 package main
 
 import (
+	"fmt"
 	"github.com/alecthomas/kingpin"
 	"os"
+	"time"
 )
 
 var (
@@ -17,6 +19,11 @@ var (
 	debug   = app.Flag("debug", "Enable debug mode").Short('d').Bool()
 	logfile = app.Flag("logfile", "Log data to file").Short('l').String()
 )
+
+func Printf(format string, a ...interface{}) {
+	fmt.Printf("[%s] ", time.Now().Format(time.RFC822Z))
+	fmt.Printf(format, a...)
+}
 
 func main() {
 	kingpin.MustParse(app.Parse(os.Args[1:]))

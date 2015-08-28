@@ -211,7 +211,7 @@ func (client *Client) ReadPacket() (data []byte, err error) {
 	}
 
 	receivedBytes += n
-	expectedBytes = int(data[0] + ((data[1] & 0x1F) << 8))
+	expectedBytes = int(data[0]) + int(data[1] & 0x1F) << 8
 	if expectedBytes >= cap(data) {
 		err = fmt.Errorf("Client read expected %d bytes but only %d bytes available", expectedBytes, cap(data))
 		return nil, err
